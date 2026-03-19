@@ -1,0 +1,71 @@
+PROJECT PHASES
+==============
+
+Phase 1 — Data Model & Supabase Schema
+---------------------------------------
+Tables:
+
+- thematic_buckets — id, name, description
+- questions — id, bucket_id (FK), type (multiple_choice, select_all, dropdown, free_text), prompt, display_order, required
+- options — id, question_id (FK), label, value, display_order
+- sessions — id (UUID, generated client-side), created_at
+- answers — id, session_id (FK), question_id (FK), value (text for free text, option id(s) for choices)
+
+Notes:
+- Questions belong to a thematic bucket; no questionnaire entity
+- A thematic bucket has a maximum of 3 questions (enforced at app layer only)
+- Responses are anonymous; users are tracked by session UUID stored in localStorage
+
+Deliverable: migration SQL, generated Supabase types, typed client wrapper in src/lib/
+
+
+Phase 2 — Static Question Components
+--------------------------------------
+One component per question type, accepting props, no interactivity yet:
+
+- MultipleChoice
+- SelectAll
+- Dropdown
+- FreeText
+- QuestionCard wrapper (label, required indicator, error slot)
+
+Deliverable: visually complete Tailwind-styled components
+
+
+Phase 3 — Bucket Page & Client State
+--------------------------------------
+A dynamic page (/bucket/[id]) that:
+
+- Fetches a bucket and its (up to 3) questions + options
+- Renders each question with the correct component
+- Manages answer state client-side
+- Validates required fields before submission
+
+Deliverable: a fully interactive bucket page
+
+
+Phase 4 — Session & Answer Persistence
+----------------------------------------
+On submission:
+
+- Generate or retrieve a session UUID from localStorage
+- Upsert a sessions record
+- Write each answers record to Supabase
+- Show confirmation screen; guard against double-submit
+
+Deliverable: answers persisted to Supabase per anonymous session
+
+
+Phase 5 — Error States, Loading & Accessibility
+-------------------------------------------------
+- Skeleton loaders, fetch/submit error handling
+- ARIA labels, keyboard nav, focus management
+- Mobile layout review
+
+Deliverable: production-quality UX with no rough edges
+
+
+Phase 6 — (Optional) Response Viewer
+--------------------------------------
+- /admin/responses/[bucketId] — view all answers per bucket
+- Filter by question, basic CSV export
