@@ -1,0 +1,28 @@
+---
+import type { Option } from '../../lib/database.types';
+
+interface Props {
+  name: string;
+  options: Option[];
+  value?: string;
+}
+
+const { name, options, value } = Astro.props;
+---
+
+<fieldset class="flex flex-col gap-2">
+  {options.map((option) => (
+    <label class="flex items-center gap-3 cursor-pointer group">
+      <input
+        type="radio"
+        name={name}
+        value={option.value}
+        checked={value === option.value}
+        class="w-4 h-4 accent-indigo-600 shrink-0 cursor-pointer"
+      />
+      <span class="text-sm text-gray-700 group-hover:text-gray-900">
+        {option.label}
+      </span>
+    </label>
+  ))}
+</fieldset>

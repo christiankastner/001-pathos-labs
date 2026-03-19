@@ -1,0 +1,149 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import QuestionCard from '../../components/questions/QuestionCard.astro';
+import { getBucket } from '../../lib/supabase';
+
+const { id } = Astro.params;
+
+if (!id || isNaN(Number(id))) {
+  return Astro.redirect('/404');
+}
+
+const bucket = await getBucket(Number(id));
+
+if (!bucket) {
+  return Astro.redirect('/404');
+}
+---
+
+<Layout>
+  <main class="min-h-screen bg-gray-50 px-4 py-12">
+    <div class="mx-auto max-w-2xl">
+
+      <!-- Bucket header -->
+      <div class="mb-8">
+        <h1 class="text-2xl font-bold text-gray-900">{bucket.name}</h1>
+        {bucket.description && (
+          <p class="mt-2 text-gray-500">{bucket.description}</p>
+        )}
+      </div>
+
+      <!-- Survey form -->
+      <form id="survey-form" novalidate>
+        <div class="flex flex-col gap-6">
+          {bucket.questions.map((question) => (
+            <QuestionCard question={question} />
+          ))}
+        </div>
+
+        <div class="mt-8 flex items-center justify-between">
+          <p class="text-sm text-gray-400">
+            Fields marked <span class="text-red-500">*</span> are required.
+          </p>
+          <button
+            type="submit"
+            class="rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 disabled:opacity-50"
+          >
+            Submit
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </main>
+</Layout>
+
+<script>
+  // Serialise the question metadata we need client-side from the rendered DOM
+  // so we can validate without a server round-trip.
+
+  interface QuestionMeta {
+    id: number;
+    type: string;
+    required: boolean;
+  }
+
+  function collectMeta(): QuestionMeta[] {
+    return [...document.querySelectorAll<HTMLElement>('[data-question-id]')].map(
+      (el) => ({
+        id: Number(el.dataset.questionId),
+        type: el.dataset.questionType ?? '',
+        required: el.dataset.questionRequired === 'true',
+      })
+    );
+  }
+
+  function getFieldValue(questionId: number, type: string): string[] {
+    const name = `question_${questionId}`;
+    if (type === 'select_all') {
+      return [...document.querySelectorAll<HTMLInputElement>(
+        `input[name="${name}"]:checked`
+      )].map((el) => el.value);
+    }
+    if (type === 'multiple_choice') {
+      const checked = document.querySelector<HTMLInputElement>(
+        `input[name="${name}"]:checked`
+      );
+      return checked ? [checked.value] : [];
+    }
+    if (type === 'dropdown') {
+      const sel = document.querySelector<HTMLSelectElement>(`select[name="${name}"]`);
+      return sel && sel.value ? [sel.value] : [];
+    }
+    // free_text
+    const ta = document.querySelector<HTMLTextAreaElement>(`textarea[name="${name}"]`);
+    return ta && ta.value.trim() ? [ta.value.trim()] : [];
+  }
+
+  function showError(questionId: number, message: string) {
+    const card = document.querySelector<HTMLElement>(`[data-question-id="${questionId}"]`);
+    if (!card) return;
+    let errorEl = card.querySelector<HTMLElement>('[data-error]');
+    if (!errorEl) {
+      errorEl = document.createElement('p');
+      errorEl.dataset.error = '';
+      errorEl.className = 'mt-3 text-sm text-red-600';
+      errorEl.setAttribute('role', 'alert');
+      card.appendChild(errorEl);
+    }
+    errorEl.textContent = message;
+  }
+
+  function clearError(questionId: number) {
+    const card = document.querySelector<HTMLElement>(`[data-question-id="${questionId}"]`);
+    card?.querySelector('[data-error]')?.remove();
+  }
+
+  const form = document.getElementById('survey-form') as HTMLFormElement;
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+
+    const questions = collectMeta();
+    let firstErrorId: number | null = null;
+
+    for (const q of questions) {
+      clearError(q.id);
+      if (q.required && getFieldValue(q.id, q.type).length === 0) {
+        showError(q.id, 'This field is required.');
+        firstErrorId ??= q.id;
+      }
+    }
+
+    if (firstErrorId !== null) {
+      document
+        .querySelector(`[data-question-id="${firstErrorId}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    // Collect answers for Phase 4 submission
+    const answers = questions.map((q) => ({
+      question_id: q.id,
+      value: getFieldValue(q.id, q.type).join(','),
+    }));
+
+    // Dispatch a custom event so Phase 4 can handle persistence
+    form.dispatchEvent(new CustomEvent('survey:submit', { detail: { answers }, bubbles: true }));
+  });
+</script>
