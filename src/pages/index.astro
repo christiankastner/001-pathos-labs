@@ -89,6 +89,19 @@ const question = await getActiveQuestion();
 
     </div>
   </main>
+
+  <!-- Clear local storage button -->
+  <button
+    id="clear-storage-btn"
+    aria-label="Reset session"
+    class="flex fixed items-center gap-2 px-4 bottom-5 right-5 z-40 rounded-full border border-white/10 bg-black/40 p-2.5 text-white/30 backdrop-blur-sm transition-all hover:border-white/20 hover:text-white/60 focus:outline-none focus:ring-2 focus:ring-white/20"
+  >
+    Clear session
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <path d="M3 3v5h5" />
+    </svg>
+  </button>
 </Layout>
 
 <script>
@@ -245,5 +258,12 @@ const question = await getActiveQuestion();
 
     markSubmitted();
     showConfirmation();
+  });
+
+  // ── Clear local storage ──────────────────────────────────────────────────
+
+  document.getElementById('clear-storage-btn')?.addEventListener('click', () => {
+    localStorage.clear();
+    window.location.reload();
   });
 </script>
