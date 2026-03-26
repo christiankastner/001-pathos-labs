@@ -9,7 +9,8 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "td-relay": "node --env-file=.env scripts/td-relay.js"
   },
   "dependencies": {
     "@astrojs/node": "^10.0.3",
@@ -17,5 +18,9 @@
     "@tailwindcss/vite": "^4.2.2",
     "astro": "^6.0.7",
     "tailwindcss": "^4.2.2"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1",
+    "ws": "^8.20.0"
   }
 }

@@ -1,13 +1,16 @@
 ---
 import Layout from '../../../layouts/Layout.astro';
-import { getResponses } from '../../../lib/supabase';
+import { getResponses, getLookupMaps } from '../../../lib/supabase';
 
-const rows = await getResponses();
+const [rows, lookupMaps] = await Promise.all([getResponses(), getLookupMaps()]);
 
 // Unique questions for the filter UI
 const questionMap = new Map(rows.map((r) => [r.question_id, r.question_prompt]));
 const questions = [...questionMap.entries()].map(([id, prompt]) => ({ id, prompt }));
 const sessionCount = new Set(rows.map((r) => r.session_id)).size;
+
+// Serialise existing session IDs so the client can track new arrivals accurately
+const existingSessionIds = [...new Set(rows.map((r) => r.session_id))];
 ---
 
 <Layout>
@@ -20,81 +23,212 @@ const sessionCount = new Set(rows.map((r) => r.session_id)).size;
           <p class="text-sm font-medium text-indigo-600">Response Viewer</p>
           <h1 class="mt-1 text-2xl font-bold text-gray-900">All Responses</h1>
           <p class="mt-1 text-sm text-gray-500">
-            {sessionCount} {sessionCount === 1 ? 'response' : 'responses'} across {questions.length} {questions.length === 1 ? 'question' : 'questions'}
+            <span id="session-count">{sessionCount}</span>
+            {sessionCount === 1 ? 'response' : 'responses'} across
+            <span id="question-count">{questions.length}</span>
+            {questions.length === 1 ? 'question' : 'questions'}
           </p>
         </div>
-        <button
-          id="export-csv"
-          class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-        >
-          Export CSV
-        </button>
+        <div class="flex items-center gap-3">
+          <!-- Live connection status -->
+          <div class="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-500 shadow-sm">
+            <span id="live-dot" class="h-2 w-2 rounded-full bg-gray-300"></span>
+            <span id="live-label">Connecting…</span>
+          </div>
+          <button
+            id="export-csv"
+            class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          >
+            Export CSV
+          </button>
+        </div>
       </div>
 
-      {rows.length === 0 ? (
-        <div class="rounded-2xl border border-dashed border-gray-300 bg-white p-12 text-center">
-          <p class="text-gray-400">No responses yet.</p>
+      {questions.length > 0 && (
+        <!-- Question filter -->
+        <div class="mb-4 flex items-center gap-3">
+          <label for="question-filter" class="text-sm font-medium text-gray-700">
+            Filter by question:
+          </label>
+          <select
+            id="question-filter"
+            class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+          >
+            <option value="">All questions</option>
+            {questions.map((q) => (
+              <option value={q.id}>{q.prompt}</option>
+            ))}
+          </select>
         </div>
-      ) : (
-        <>
-          <!-- Question filter -->
-          <div class="mb-4 flex items-center gap-3">
-            <label for="question-filter" class="text-sm font-medium text-gray-700">
-              Filter by question:
-            </label>
-            <select
-              id="question-filter"
-              class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
-            >
-              <option value="">All questions</option>
-              {questions.map((q) => (
-                <option value={q.id}>{q.prompt}</option>
-              ))}
-            </select>
-          </div>
-
-          <!-- Responses table -->
-          <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-            <div class="overflow-x-auto">
-              <table
-                id="responses-table"
-                class="w-full text-sm"
-                aria-label="Survey responses"
-              >
-                <thead>
-                  <tr class="border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    <th class="px-5 py-3 w-28">Session</th>
-                    <th class="px-5 py-3">Question</th>
-                    <th class="px-5 py-3">Answer</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-100">
-                  {rows.map((row) => (
-                    <tr
-                      class="hover:bg-gray-50"
-                      data-question-id={row.question_id}
-                    >
-                      <td class="px-5 py-3 font-mono text-xs text-gray-400" title={row.session_id}>
-                        {row.session_id.slice(0, 8)}…
-                      </td>
-                      <td class="px-5 py-3 text-gray-600 max-w-xs truncate" title={row.question_prompt}>
-                        {row.question_prompt}
-                      </td>
-                      <td class="px-5 py-3 text-gray-900">{row.value_label}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
       )}
+
+      <!-- Responses table (always rendered; tbody shows empty state when no rows) -->
+      <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div class="overflow-x-auto">
+          <table
+            id="responses-table"
+            class="w-full text-sm"
+            aria-label="Survey responses"
+          >
+            <thead>
+              <tr class="border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                <th class="px-5 py-3 w-28">Session</th>
+                <th class="px-5 py-3">Question</th>
+                <th class="px-5 py-3">Answer</th>
+              </tr>
+            </thead>
+            <tbody id="responses-tbody" class="divide-y divide-gray-100">
+              {rows.length === 0 ? (
+                <tr id="empty-row">
+                  <td colspan="3" class="px-5 py-12 text-center text-gray-400">
+                    No responses yet. Waiting for live updates…
+                  </td>
+                </tr>
+              ) : (
+                rows.map((row) => (
+                  <tr
+                    class="hover:bg-gray-50"
+                    data-question-id={row.question_id}
+                    data-session-id={row.session_id}
+                  >
+                    <td class="px-5 py-3 font-mono text-xs text-gray-400" title={row.session_id}>
+                      {row.session_id.slice(0, 8)}…
+                    </td>
+                    <td class="px-5 py-3 text-gray-600 max-w-xs truncate" title={row.question_prompt}>
+                      {row.question_prompt}
+                    </td>
+                    <td class="px-5 py-3 text-gray-900">{row.value_label}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
     </div>
   </main>
 </Layout>
 
+<!-- Lookup data for the client-side realtime handler (data attribute avoids inline-script issues) -->
+<div
+  id="realtime-data"
+  data-maps={JSON.stringify({ lookupMaps, existingSessionIds })}
+  hidden
+></div>
+
 <script>
+  import { supabaseBrowser } from '../../../lib/supabase-browser';
+
+  // ── Lookup maps ──────────────────────────────────────────────────────────────
+  const raw = JSON.parse((document.getElementById('realtime-data') as HTMLElement).dataset.maps!);
+  const { questionPrompts, questionTypes, optionLabels } = raw.lookupMaps as {
+    questionPrompts: Record<string, string>;
+    questionTypes:   Record<string, string>;
+    optionLabels:    Record<string, string>;
+  };
+  const knownSessions = new Set<string>(raw.existingSessionIds as string[]);
+
+  function resolveLabel(questionId: string, value: string): string {
+    if (questionTypes[questionId] === 'free_text') return value;
+    return value
+      .split(',')
+      .map((v) => optionLabels[`${questionId}:${v}`] ?? v)
+      .join(', ');
+  }
+
+  // ── Session / question count ─────────────────────────────────────────────────
+  function updateCounts() {
+    const countEl = document.getElementById('session-count');
+    if (countEl) countEl.textContent = String(knownSessions.size);
+  }
+
+  // ── Live status badge ────────────────────────────────────────────────────────
+  const liveDot   = document.getElementById('live-dot')!;
+  const liveLabel = document.getElementById('live-label')!;
+
+  function setLiveStatus(connected: boolean) {
+    liveDot.className = connected
+      ? 'h-2 w-2 rounded-full bg-green-400 animate-pulse'
+      : 'h-2 w-2 rounded-full bg-yellow-400';
+    liveLabel.textContent = connected ? 'Live' : 'Reconnecting…';
+  }
+
+  // ── DOM helpers ──────────────────────────────────────────────────────────────
+  function buildRow(sessionId: string, questionId: string, valueLabel: string): HTMLTableRowElement {
+    const prompt = questionPrompts[questionId] ?? `Question ${questionId}`;
+    const tr = document.createElement('tr');
+    tr.className = 'hover:bg-gray-50 bg-green-50 transition-colors duration-1000';
+    tr.dataset.questionId = questionId;
+    tr.dataset.sessionId  = sessionId;
+    tr.innerHTML = `
+      <td class="px-5 py-3 font-mono text-xs text-gray-400" title="${sessionId}">${sessionId.slice(0, 8)}…</td>
+      <td class="px-5 py-3 text-gray-600 max-w-xs truncate" title="${prompt}">${prompt}</td>
+      <td class="px-5 py-3 text-gray-900">${valueLabel}</td>
+    `;
+    // Fade highlight out after 2 s
+    setTimeout(() => tr.classList.remove('bg-green-50'), 2000);
+    return tr;
+  }
+
+  function handleInsert(record: { session_id: string; question_id: number; value: string }) {
+    const tbody = document.getElementById('responses-tbody')!;
+
+    // Remove empty-state row if present
+    document.getElementById('empty-row')?.remove();
+
+    const qId  = String(record.question_id);
+    const label = resolveLabel(qId, record.value);
+    const tr    = buildRow(record.session_id, qId, label);
+    tbody.appendChild(tr);
+
+    knownSessions.add(record.session_id);
+    updateCounts();
+
+    // Keep the active filter applied to the new row
+    const filter = document.getElementById('question-filter') as HTMLSelectElement | null;
+    if (filter?.value) tr.hidden = tr.dataset.questionId !== filter.value;
+  }
+
+  function handleUpdate(record: { session_id: string; question_id: number; value: string }) {
+    const qId = String(record.question_id);
+    const existing = document.querySelector<HTMLTableRowElement>(
+      `#responses-tbody tr[data-session-id="${record.session_id}"][data-question-id="${qId}"]`,
+    );
+    if (!existing) {
+      handleInsert(record);
+      return;
+    }
+    const cells = existing.querySelectorAll('td');
+    if (cells[2]) cells[2].textContent = resolveLabel(qId, record.value);
+    existing.classList.add('bg-yellow-50');
+    setTimeout(() => existing.classList.remove('bg-yellow-50'), 2000);
+  }
+
+  // ── Supabase Realtime subscription ───────────────────────────────────────────
+  // Supabase Realtime is a managed WebSocket service: it maintains the persistent
+  // connection, handles reconnection, and pub/sub channel routing — so this works
+  // seamlessly in serverless / SSR deployments without a dedicated WS server.
+  supabaseBrowser
+    .channel('answers-live')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'answers' },
+      (payload) => {
+        if (payload.eventType === 'INSERT') {
+          handleInsert(payload.new as { session_id: string; question_id: number; value: string });
+        } else if (payload.eventType === 'UPDATE') {
+          handleUpdate(payload.new as { session_id: string; question_id: number; value: string });
+        }
+      },
+    )
+    .subscribe((status) => {
+      setLiveStatus(status === 'SUBSCRIBED');
+
+      console.log('status', status);
+    });
+
+  // ── Filter ───────────────────────────────────────────────────────────────────
   const filter = document.getElementById('question-filter') as HTMLSelectElement | null;
   const table  = document.getElementById('responses-table') as HTMLTableElement | null;
 
@@ -105,14 +239,15 @@ const sessionCount = new Set(rows.map((r) => r.session_id)).size;
     });
   });
 
+  // ── CSV export ───────────────────────────────────────────────────────────────
   document.getElementById('export-csv')?.addEventListener('click', () => {
     const rows = [...(table ? table.querySelectorAll<HTMLTableRowElement>('tbody tr') : [])];
-    const visible = rows.filter((r) => !r.hidden);
+    const visible = rows.filter((r) => !r.hidden && r.id !== 'empty-row');
 
     const lines: string[] = ['Session,Question,Answer'];
     for (const row of visible) {
       const cells = [...row.querySelectorAll('td')].map((td) =>
-        `"${(td.title || td.textContent || '').replace(/"/g, '""')}"`
+        `"${(td.title || td.textContent || '').replace(/"/g, '""')}"`,
       );
       lines.push(cells.join(','));
     }

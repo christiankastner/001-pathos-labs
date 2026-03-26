@@ -21,8 +21,8 @@ const question = await getActiveQuestion();
     <img src={sponsorImage.src} class="absolute bottom-5 left-1/2 -translate-x-1/2 w-full px-4" alt="" />
   </div>
 
-  <main class="min-h-screen flex items-center justify-center px-4 py-12">
-    <div class="w-full max-w-lg">
+  <main class="min-h-screen flex justify-center px-4 py-12">
+    <div class="w-full max-w-lg mt-[18vh]">
 
       {question ? (
         <>
@@ -213,7 +213,7 @@ const question = await getActiveQuestion();
 
   // ── Submit handler ───────────────────────────────────────────────────────
 
-  const card = document.querySelector<HTMLElement>(`[data-question-id="${questionId}"]`);
+  const card = document.querySelector<HTMLElement>(`[data-question-id="${questionId}"][data-question-type]`);
   const questionType = card?.dataset.questionType ?? '';
   const questionRequired = card?.dataset.questionRequired === 'true';
 

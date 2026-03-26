@@ -68,6 +68,35 @@ export async function submitAnswers(answers: InsertAnswer[]): Promise<boolean> {
   return !error;
 }
 
+// Lookup maps needed by the browser client for resolving realtime payloads.
+// Returned as plain JSON-serialisable objects so the page can embed them inline.
+export interface LookupMaps {
+  questionPrompts: Record<number, string>;
+  questionTypes: Record<number, string>;
+  optionLabels: Record<string, string>; // key: "<question_id>:<option_value>"
+}
+
+export async function getLookupMaps(): Promise<LookupMaps> {
+  const [{ data: questions }, { data: options }] = await Promise.all([
+    supabase.from('questions').select('id,prompt,type'),
+    supabase.from('options').select('question_id,value,label'),
+  ]);
+
+  const questionPrompts: Record<number, string> = {};
+  const questionTypes: Record<number, string> = {};
+  for (const q of (questions ?? []) as { id: number; prompt: string; type: string }[]) {
+    questionPrompts[q.id] = q.prompt;
+    questionTypes[q.id] = q.type;
+  }
+
+  const optionLabels: Record<string, string> = {};
+  for (const opt of (options ?? []) as { question_id: number; value: string; label: string }[]) {
+    optionLabels[`${opt.question_id}:${opt.value}`] = opt.label;
+  }
+
+  return { questionPrompts, questionTypes, optionLabels };
+}
+
 // Fetch all answers across all questions, with option labels resolved for display
 export async function getResponses(): Promise<ResponseRow[]> {
   const { data: questions } = await supabase
