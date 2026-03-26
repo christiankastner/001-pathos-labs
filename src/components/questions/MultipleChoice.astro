@@ -5,24 +5,34 @@ interface Props {
   name: string;
   options: Option[];
   value?: string;
+  labelId?: string;
+  required?: boolean;
 }
 
-const { name, options, value } = Astro.props;
+const { name, options, value, labelId, required = false } = Astro.props;
 ---
 
-<fieldset class="flex flex-col gap-2">
-  {options.map((option) => (
-    <label class="flex items-center gap-3 cursor-pointer group">
-      <input
-        type="radio"
-        name={name}
-        value={option.value}
-        checked={value === option.value}
-        class="w-4 h-4 accent-indigo-600 shrink-0 cursor-pointer"
-      />
-      <span class="text-sm text-gray-700 group-hover:text-gray-900">
-        {option.label}
-      </span>
-    </label>
-  ))}
+<fieldset
+  aria-labelledby={labelId}
+  aria-required={required ? 'true' : undefined}
+  class="flex flex-col gap-2 border-0 p-0 m-0"
+>
+  {options.map((option) => {
+    const optId = `${name}_${option.value}`;
+    return (
+      <label for={optId} class="flex items-center gap-3 cursor-pointer group">
+        <input
+          type="radio"
+          id={optId}
+          name={name}
+          value={option.value}
+          checked={value === option.value}
+          class="w-4 h-4 accent-violet-500 shrink-0 cursor-pointer"
+        />
+        <span class="text-sm text-white/70 transition-colors group-hover:text-white">
+          {option.label}
+        </span>
+      </label>
+    );
+  })}
 </fieldset>

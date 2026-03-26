@@ -1,1 +1,115 @@
 @import "tailwindcss";
+
+/* ── Inter – local font-face declarations ──────────────────────────────────
+   Using the 18pt optical-size cut, which is tuned for UI / body text sizes.
+   Only the weights the project actually uses are registered to keep the
+   initial load lean; add more entries here as needed.
+   ────────────────────────────────────────────────────────────────────────── */
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('../fonts/inter/Inter_18pt-Light.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: italic;
+  font-weight: 300;
+  font-display: swap;
+  src: url('../fonts/inter/Inter_18pt-LightItalic.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../fonts/inter/Inter_18pt-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../fonts/inter/Inter_18pt-Italic.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../fonts/inter/Inter_18pt-Medium.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: italic;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../fonts/inter/Inter_18pt-MediumItalic.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../fonts/inter/Inter_18pt-SemiBold.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: italic;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../fonts/inter/Inter_18pt-SemiBoldItalic.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../fonts/inter/Inter_18pt-Bold.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../fonts/inter/Inter_18pt-BoldItalic.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('../fonts/inter/Inter_18pt-ExtraBold.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: italic;
+  font-weight: 800;
+  font-display: swap;
+  src: url('../fonts/inter/Inter_18pt-ExtraBoldItalic.ttf') format('truetype');
+}
+
+/* ── Tailwind v4 theme override ─────────────────────────────────────────── */
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ── Base typography ─────────────────────────────────────────────────────── */
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}

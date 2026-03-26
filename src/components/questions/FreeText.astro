@@ -4,14 +4,18 @@ interface Props {
   value?: string;
   placeholder?: string;
   rows?: number;
+  labelId?: string;
+  required?: boolean;
 }
 
-const { name, value, placeholder = 'Your answer…', rows = 4 } = Astro.props;
+const { name, value, placeholder = 'Your answer…', rows = 4, labelId, required = false } = Astro.props;
 ---
 
 <textarea
   name={name}
   rows={rows}
   placeholder={placeholder}
-  class="w-full resize-y rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-700 shadow-sm placeholder:text-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+  aria-labelledby={labelId}
+  aria-required={required ? 'true' : undefined}
+  class="w-full resize-y rounded-xl border border-white/15 bg-white/8 px-4 py-2.5 text-sm text-white shadow-sm backdrop-blur-sm placeholder:text-white/30 transition-colors focus:border-violet-500/60 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
 >{value ?? ''}</textarea>

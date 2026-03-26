@@ -1,35 +1,53 @@
 import { createClient } from '@supabase/supabase-js';
-import type { Database, BucketWithQuestions, InsertAnswer } from './database.types';
+import type { Question, Option, QuestionWithOptions, InsertAnswer } from './database.types';
+
+export interface ResponseRow {
+  session_id: string;
+  question_id: number;
+  question_prompt: string;
+  display_order: number;
+  value: string;
+  value_label: string; // human-readable label for choice types; raw text for free_text
+}
 
 const supabaseUrl = import.meta.env.SUPABASE_URL as string;
 const supabaseKey = import.meta.env.SUPABASE_KEY as string;
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseKey);
+// createClient is untyped here because our hand-crafted Database interfaces don't
+// carry index signatures, which Supabase v2's GenericTable constraint requires.
+// All query results are cast to our explicit app-layer types at the call site.
+export const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Fetch a single bucket with its questions and options, ordered for display
-export async function getBucket(bucketId: number): Promise<BucketWithQuestions | null> {
-  const { data: bucket, error: bucketError } = await supabase
-    .from('thematic_buckets')
+// Fetch all questions ordered by id
+export async function getAllQuestions(): Promise<Question[]> {
+  const { data } = await supabase
+    .from('questions')
     .select('*')
-    .eq('id', bucketId)
+    .order('id');
+
+  return (data ?? []) as Question[];
+}
+
+// Fetch the currently active question with its options
+export async function getActiveQuestion(): Promise<QuestionWithOptions | null> {
+  const { data: question, error } = await supabase
+    .from('questions')
+    .select('*')
+    .eq('is_active', true)
     .single();
 
-  if (bucketError || !bucket) return null;
+  if (error || !question) return null;
 
-  const { data: questions, error: questionsError } = await supabase
-    .from('questions')
-    .select('*, options(*)')
-    .eq('bucket_id', bucketId)
-    .order('display_order', { ascending: true });
+  const { data: options } = await supabase
+    .from('options')
+    .select('*')
+    .eq('question_id', question.id)
+    .order('display_order');
 
-  if (questionsError || !questions) return null;
-
-  const questionsWithOptions = questions.map((q) => ({
-    ...q,
-    options: (q.options ?? []).sort((a, b) => a.display_order - b.display_order),
-  }));
-
-  return { ...bucket, questions: questionsWithOptions };
+  return {
+    ...(question as Question),
+    options: ((options ?? []) as Option[]).sort((a, b) => a.display_order - b.display_order),
+  };
 }
 
 // Upsert a session record (idempotent — safe to call if session already exists)
@@ -48,4 +66,56 @@ export async function submitAnswers(answers: InsertAnswer[]): Promise<boolean> {
     .upsert(answers, { onConflict: 'session_id,question_id' });
 
   return !error;
+}
+
+// Fetch all answers across all questions, with option labels resolved for display
+export async function getResponses(): Promise<ResponseRow[]> {
+  const { data: questions } = await supabase
+    .from('questions')
+    .select('*')
+    .order('id');
+
+  if (!questions || !questions.length) return [];
+
+  const questionIds = (questions as Question[]).map((q) => q.id);
+
+  const { data: options } = await supabase
+    .from('options')
+    .select('*')
+    .in('question_id', questionIds);
+
+  const optionLabelMap = new Map<string, string>();
+  for (const opt of (options ?? []) as Option[]) {
+    optionLabelMap.set(`${opt.question_id}:${opt.value}`, opt.label);
+  }
+
+  const questionMap = new Map((questions as Question[]).map((q) => [q.id, q]));
+
+  const { data: answers } = await supabase
+    .from('answers')
+    .select('*')
+    .in('question_id', questionIds)
+    .order('session_id');
+
+  if (!answers) return [];
+
+  return (answers as { session_id: string; question_id: number; value: string; id: number }[]).map((a) => {
+    const question = questionMap.get(a.question_id)!;
+    const value_label =
+      question.type === 'free_text'
+        ? a.value
+        : a.value
+            .split(',')
+            .map((v) => optionLabelMap.get(`${a.question_id}:${v}`) ?? v)
+            .join(', ');
+
+    return {
+      session_id: a.session_id,
+      question_id: a.question_id,
+      question_prompt: question.prompt,
+      display_order: question.display_order,
+      value: a.value,
+      value_label,
+    };
+  });
 }

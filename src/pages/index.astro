@@ -1,11 +1,249 @@
 ---
-import Welcome from '../components/Welcome.astro';
 import Layout from '../layouts/Layout.astro';
+import QuestionCard from '../components/questions/QuestionCard.astro';
+import { getActiveQuestion } from '../lib/supabase';
+import bgImage from '../assets/bg.jpg';
+import titleImage from '../assets/title-trans.png';
+import sponsorImage from '../assets/sponsored-trans.png';
 
-// Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
-// Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
+const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL as string;
+const supabaseKey = import.meta.env.PUBLIC_SUPABASE_KEY as string;
+
+const question = await getActiveQuestion();
 ---
 
 <Layout>
-	<Welcome />
+  <!-- Full-viewport background -->
+  <div class="fixed inset-0 -z-10" aria-hidden="true">
+    <img src={bgImage.src} class="h-full w-full object-cover" alt="" />
+    <div class="absolute inset-0 bg-black/20"></div>
+    <img src={titleImage.src} class="absolute top-20 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4" alt="" />
+    <img src={sponsorImage.src} class="absolute bottom-5 left-1/2 -translate-x-1/2 w-full px-4" alt="" />
+  </div>
+
+  <main class="min-h-screen flex items-center justify-center px-4 py-12">
+    <div class="w-full max-w-lg">
+
+      {question ? (
+        <>
+          <!-- Global error banner (hidden by default) -->
+          <div
+            id="error-banner"
+            role="alert"
+            aria-live="assertive"
+            hidden
+            class="mb-4 rounded-2xl border border-rose-500/30 bg-rose-950/60 px-4 py-3 text-sm text-rose-300 backdrop-blur-sm"
+          ></div>
+
+          <!-- Survey form wrapper — hidden after successful submission -->
+          <div id="survey-form-wrapper">
+            <form
+              id="survey-form"
+              data-question-id={question.id}
+              data-supabase-url={supabaseUrl}
+              data-supabase-key={supabaseKey}
+              novalidate
+              aria-label="Survey question"
+            >
+              <!-- Submission overlay -->
+              <div
+                id="submit-overlay"
+                hidden
+                aria-hidden="true"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+              >
+                <div class="flex items-center gap-3 rounded-2xl border border-white/10 bg-gray-950/80 px-6 py-4 shadow-2xl backdrop-blur-xl">
+                  <svg class="h-5 w-5 animate-spin text-violet-400" viewBox="0 0 24 24" fill="none">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                  </svg>
+                  <span class="text-sm font-medium text-white/80">Submitting your answer…</span>
+                </div>
+              </div>
+
+              <QuestionCard question={question} />
+                
+              </div>
+            </form>
+          </div>
+
+          <!-- Confirmation screen -->
+          <div id="confirmation" hidden>
+            <div class="rounded-3xl border border-emerald-400/20 bg-gray-950/70 p-10 text-center backdrop-blur-2xl shadow-2xl">
+              <div class="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/20 ring-1 ring-emerald-400/30">
+                <svg class="h-7 w-7 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h2 class="text-xl font-semibold text-white">Thank you!</h2>
+              <p class="mt-2 text-sm text-white/50">Your response has been recorded.</p>
+            </div>
+          </div>
+        </>
+      ) : (
+        <!-- No active question -->
+        <div class="rounded-3xl border border-white/10 bg-gray-950/60 p-12 text-center backdrop-blur-2xl">
+          <p class="text-white/40">No question is active right now.</p>
+        </div>
+      )}
+
+    </div>
+  </main>
 </Layout>
+
+<script>
+  import { createClient } from '@supabase/supabase-js';
+
+  const SESSION_KEY   = 'pathos_session_id';
+  const SUBMITTED_KEY = 'pathos_submitted';
+
+  const form = document.getElementById('survey-form') as HTMLFormElement | null;
+  if (!form) throw new Error('No active question — script skipped.');
+
+  const questionId    = Number(form.dataset.questionId);
+  const supabase      = createClient(form.dataset.supabaseUrl!, form.dataset.supabaseKey!);
+  const wrapper       = document.getElementById('survey-form-wrapper') as HTMLDivElement;
+  const confirmation  = document.getElementById('confirmation') as HTMLDivElement;
+  const errorBanner   = document.getElementById('error-banner') as HTMLDivElement;
+  const submitBtn     = document.getElementById('submit-btn') as HTMLButtonElement;
+  const overlay       = document.getElementById('submit-overlay') as HTMLDivElement;
+
+  // ── Session helpers ──────────────────────────────────────────────────────
+
+  function getOrCreateSessionId(): string {
+    let id = localStorage.getItem(SESSION_KEY);
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem(SESSION_KEY, id);
+    }
+    return id;
+  }
+
+  // ── Double-submit guard (per question ID) ────────────────────────────────
+
+  function isAlreadySubmitted(): boolean {
+    const submitted = JSON.parse(localStorage.getItem(SUBMITTED_KEY) ?? '[]') as number[];
+    return submitted.includes(questionId);
+  }
+
+  function markSubmitted(): void {
+    const submitted = JSON.parse(localStorage.getItem(SUBMITTED_KEY) ?? '[]') as number[];
+    if (!submitted.includes(questionId)) {
+      submitted.push(questionId);
+      localStorage.setItem(SUBMITTED_KEY, JSON.stringify(submitted));
+    }
+  }
+
+  if (isAlreadySubmitted()) showConfirmation();
+
+  // ── Validation helpers ───────────────────────────────────────────────────
+
+  function getFieldValue(id: number, type: string): string[] {
+    const name = `question_${id}`;
+    if (type === 'select_all') {
+      return [...document.querySelectorAll<HTMLInputElement>(`input[name="${name}"]:checked`)]
+        .map((el) => el.value);
+    }
+    if (type === 'multiple_choice') {
+      const checked = document.querySelector<HTMLInputElement>(`input[name="${name}"]:checked`);
+      return checked ? [checked.value] : [];
+    }
+    if (type === 'dropdown') {
+      const sel = document.querySelector<HTMLSelectElement>(`select[name="${name}"]`);
+      return sel?.value ? [sel.value] : [];
+    }
+    const ta = document.querySelector<HTMLTextAreaElement>(`textarea[name="${name}"]`);
+    return ta?.value.trim() ? [ta.value.trim()] : [];
+  }
+
+  function showFieldError(id: number, message: string): void {
+    const card = document.querySelector<HTMLElement>(`[data-question-id="${id}"]`);
+    if (!card) return;
+    let el = card.querySelector<HTMLElement>('[data-error]');
+    if (!el) {
+      el = document.createElement('p');
+      el.dataset.error = '';
+      el.className = 'mt-3 text-sm text-rose-400';
+      el.setAttribute('role', 'alert');
+      card.appendChild(el);
+    }
+    el.textContent = message;
+    card.querySelector('fieldset, select, textarea')?.setAttribute('aria-invalid', 'true');
+  }
+
+  function clearFieldError(id: number): void {
+    const card = document.querySelector<HTMLElement>(`[data-question-id="${id}"]`);
+    card?.querySelector('[data-error]')?.remove();
+    card?.querySelector('[aria-invalid]')?.removeAttribute('aria-invalid');
+  }
+
+  // ── UI state helpers ─────────────────────────────────────────────────────
+
+  function setLoading(loading: boolean): void {
+    submitBtn.disabled = loading;
+    submitBtn.textContent = loading ? 'Submitting…' : 'Submit';
+    overlay.hidden = !loading;
+    form!.setAttribute('aria-busy', String(loading));
+  }
+
+  function showGlobalError(message: string): void {
+    errorBanner.textContent = message;
+    errorBanner.hidden = false;
+    errorBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function showConfirmation(): void {
+    wrapper.hidden = true;
+    confirmation.hidden = false;
+    confirmation.focus();
+  }
+
+  // ── Submit handler ───────────────────────────────────────────────────────
+
+  const card = document.querySelector<HTMLElement>(`[data-question-id="${questionId}"]`);
+  const questionType = card?.dataset.questionType ?? '';
+  const questionRequired = card?.dataset.questionRequired === 'true';
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorBanner.hidden = true;
+    clearFieldError(questionId);
+
+    const values = getFieldValue(questionId, questionType);
+
+    if (questionRequired && values.length === 0) {
+      showFieldError(questionId, 'This field is required.');
+      return;
+    }
+
+    setLoading(true);
+
+    const sessionId = getOrCreateSessionId();
+
+    const { error: sessionError } = await supabase
+      .from('sessions')
+      .upsert({ id: sessionId }, { onConflict: 'id', ignoreDuplicates: true });
+
+    if (sessionError) {
+      showGlobalError('Something went wrong saving your session. Please try again.');
+      setLoading(false);
+      return;
+    }
+
+    const { error: answersError } = await supabase
+      .from('answers')
+      .upsert(
+        [{ session_id: sessionId, question_id: questionId, value: values.join(',') }],
+        { onConflict: 'session_id,question_id' }
+      );
+
+    if (answersError) {
+      showGlobalError('Something went wrong submitting your answer. Please try again.');
+      setLoading(false);
+      return;
+    }
+
+    markSubmitted();
+    showConfirmation();
+  });
+</script>

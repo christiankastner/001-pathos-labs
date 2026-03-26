@@ -13,6 +13,7 @@ export interface Question {
   prompt: string;
   display_order: number;
   required: boolean;
+  is_active: boolean;
 }
 
 export interface Option {
@@ -55,7 +56,11 @@ export interface InsertAnswer {
   value: string;
 }
 
-// Database schema type consumed by the Supabase client generic
+// Database schema type consumed by the Supabase client generic.
+// Must satisfy GenericDatabase (requires Views, Functions, CompositeTypes, and
+// Relationships on each table) for Supabase JS v2 to resolve table types correctly.
+
+type EmptyRecord = Record<string, never>;
 
 export interface Database {
   public: {
@@ -64,30 +69,38 @@ export interface Database {
         Row: ThematicBucket;
         Insert: Omit<ThematicBucket, 'id'>;
         Update: Partial<Omit<ThematicBucket, 'id'>>;
+        Relationships: [];
       };
       questions: {
         Row: Question;
-        Insert: Omit<Question, 'id'>;
+        Insert: Omit<Question, 'id'> & { is_active?: boolean };
         Update: Partial<Omit<Question, 'id'>>;
+        Relationships: [];
       };
       options: {
         Row: Option;
         Insert: Omit<Option, 'id'>;
         Update: Partial<Omit<Option, 'id'>>;
+        Relationships: [];
       };
       sessions: {
         Row: Session;
         Insert: InsertSession;
-        Update: never;
+        Update: Partial<Pick<Session, 'created_at'>>;
+        Relationships: [];
       };
       answers: {
         Row: Answer;
         Insert: InsertAnswer;
         Update: Partial<InsertAnswer>;
+        Relationships: [];
       };
     };
+    Views: EmptyRecord;
+    Functions: EmptyRecord;
     Enums: {
       question_type: QuestionType;
     };
+    CompositeTypes: EmptyRecord;
   };
 }
