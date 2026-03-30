@@ -6,7 +6,7 @@ export const onRequest = defineMiddleware((context, next) => {
 
   const isLoginPage  = pathname === '/admin/login' || pathname.startsWith('/admin/login/');
   const isAdminRoute = pathname === '/admin'        || pathname.startsWith('/admin/');
-  const isAdminApi   = pathname.startsWith('/api/questions');
+  const isAdminApi   = pathname.startsWith('/api/questions') || pathname.startsWith('/api/answers') || pathname.startsWith('/api/buckets');
 
   const isAdminRoot  = pathname === '/admin' || pathname === '/admin/';
   const authenticated = context.cookies.get(ADMIN_COOKIE)?.value === ADMIN_TOKEN;
