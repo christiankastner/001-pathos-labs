@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import type { Question, Option, QuestionWithOptions, InsertAnswer } from './database.types';
+import type { Question, Option, QuestionWithOptions, ThematicBucket, InsertAnswer } from './database.types';
 
 export interface ResponseRow {
   session_id: string;
@@ -18,6 +18,16 @@ const supabaseKey = import.meta.env.SUPABASE_KEY as string;
 // All query results are cast to our explicit app-layer types at the call site.
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Fetch all thematic buckets ordered by id
+export async function getAllBuckets(): Promise<ThematicBucket[]> {
+  const { data } = await supabase
+    .from('thematic_buckets')
+    .select('*')
+    .order('id');
+
+  return (data ?? []) as ThematicBucket[];
+}
+
 // Fetch all questions ordered by id
 export async function getAllQuestions(): Promise<Question[]> {
   const { data } = await supabase
@@ -26,6 +36,26 @@ export async function getAllQuestions(): Promise<Question[]> {
     .order('id');
 
   return (data ?? []) as Question[];
+}
+
+// Fetch all questions with their options, ordered by id
+export async function getAllQuestionsWithOptions(): Promise<QuestionWithOptions[]> {
+  const [{ data: questions }, { data: options }] = await Promise.all([
+    supabase.from('questions').select('*').order('id'),
+    supabase.from('options').select('*').order('display_order'),
+  ]);
+
+  const optionsByQuestion = new Map<number, Option[]>();
+  for (const opt of (options ?? []) as Option[]) {
+    const list = optionsByQuestion.get(opt.question_id) ?? [];
+    list.push(opt);
+    optionsByQuestion.set(opt.question_id, list);
+  }
+
+  return ((questions ?? []) as Question[]).map((q) => ({
+    ...q,
+    options: optionsByQuestion.get(q.id) ?? [],
+  }));
 }
 
 // Fetch the currently active question with its options
