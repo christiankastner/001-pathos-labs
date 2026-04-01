@@ -7,9 +7,10 @@ interface Props {
   value?: string;
   labelId?: string;
   required?: boolean;
+  accentClass?: string;
 }
 
-const { name, options, value, labelId, required = false } = Astro.props;
+const { name, options, value, labelId, required = false, accentClass = 'accent-violet-500' } = Astro.props;
 ---
 
 <fieldset
@@ -27,7 +28,7 @@ const { name, options, value, labelId, required = false } = Astro.props;
           name={name}
           value={option.value}
           checked={value === option.value}
-          class="w-4 h-4 accent-violet-500 shrink-0 cursor-pointer"
+          class:list={["w-4 h-4 shrink-0 cursor-pointer", accentClass]}
         />
         <span class="text-sm text-white/70 transition-colors group-hover:text-white">
           {option.label}

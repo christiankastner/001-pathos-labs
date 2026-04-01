@@ -1,10 +1,12 @@
 ---
 import Layout from '../../../layouts/Layout.astro';
-import { getAllQuestions } from '../../../lib/supabase';
+import { getAllQuestionsWithOptions, getAllBuckets } from '../../../lib/supabase';
 
+const [questions, buckets] = await Promise.all([getAllQuestionsWithOptions(), getAllBuckets()]);
 
-
-const questions = await getAllQuestions();
+// Group questions by bucket, preserving bucket order
+const questionsByBucket = new Map(buckets.map((b) => [b.id, questions.filter((q) => q.bucket_id === b.id)]));
+const bucketsWithQuestions = buckets.filter((b) => (questionsByBucket.get(b.id)?.length ?? 0) > 0);
 ---
 
 <Layout>
@@ -12,92 +14,236 @@ const questions = await getAllQuestions();
     <div class="mx-auto max-w-4xl">
 
       <!-- Header -->
-      <div class="mb-8">
-        <p class="text-sm font-medium text-indigo-600">Admin</p>
-        <h1 class="mt-1 text-2xl font-bold text-gray-900">Question Management</h1>
-        <p class="mt-1 text-sm text-gray-500">
-          Only one question can be active at a time. The active question is shown on the survey page.
-        </p>
+      <div class="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <p class="text-sm font-medium text-indigo-600">Admin</p>
+          <h1 class="mt-1 text-2xl font-bold text-gray-900">Question Management</h1>
+          <p class="mt-1 text-sm text-gray-500">
+            Only one question can be active at a time. The active question is shown on the survey page.
+          </p>
+        </div>
+        <button
+          id="new-question-btn"
+          class="mt-1 shrink-0 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-1"
+        >
+          + New Question
+        </button>
       </div>
 
       <!-- Toast notification -->
-      <div
-        id="toast"
-        hidden
-        role="status"
-        aria-live="polite"
-        class="mb-6 rounded-lg px-4 py-3 text-sm font-medium"
-      ></div>
+      <div id="toast" hidden role="status" aria-live="polite" class="mb-6 rounded-lg px-4 py-3 text-sm font-medium"></div>
 
-      {questions.length === 0 ? (
-        <div class="rounded-2xl border border-dashed border-gray-300 bg-white p-12 text-center">
-          <p class="text-gray-400">No questions found.</p>
-        </div>
-      ) : (
-        <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <ul class="divide-y divide-gray-100" id="question-list">
-            {questions.map((q) => (
-              <li
-                id={`question-${q.id}`}
-                data-active={String(q.is_active)}
-                class:list={[
-                  'flex items-start justify-between gap-4 px-6 py-4 transition-colors',
-                  q.is_active ? 'bg-indigo-50' : 'hover:bg-gray-50',
-                ]}
-              >
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2.5 flex-wrap">
-                    <!-- Type badge -->
-                    <span class="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 capitalize">
-                      {q.type.replace('_', ' ')}
-                    </span>
-                    <!-- Active badge -->
-                    {q.is_active && (
-                      <span class="active-badge inline-flex items-center gap-1 rounded-md bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-700">
-                        <span class="h-1.5 w-1.5 rounded-full bg-indigo-500" aria-hidden="true"></span>
-                        Active
-                      </span>
-                    )}
-                  </div>
-                  <p class="mt-1.5 text-sm text-gray-900">{q.prompt}</p>
-                </div>
+      <!-- Question list grouped by bucket -->
+      <div id="question-list-wrapper" class="space-y-4">
 
-                <div class="flex shrink-0 items-center gap-2">
-                  {q.is_active ? (
-                    <button
-                      data-id={q.id}
-                      data-action="deactivate"
-                      class="action-btn rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Deactivate
-                    </button>
-                  ) : (
-                    <button
-                      data-id={q.id}
-                      data-action="activate"
-                      class="action-btn rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Set Active
-                    </button>
-                  )}
+        {questions.length === 0 && (
+          <div id="empty-state" class="rounded-2xl border border-dashed border-gray-300 bg-white p-12 text-center text-sm text-gray-400">
+            No questions yet. Create one to get started.
+          </div>
+        )}
+
+        {bucketsWithQuestions.map((bucket) => {
+          const bqs = questionsByBucket.get(bucket.id)!;
+          return (
+            <div
+              class="bucket-group overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
+              data-bucket-id={bucket.id}
+            >
+              <!-- Bucket header -->
+              <div class="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-6 py-3">
+                <div class="flex items-center gap-2 min-w-0">
+                  <h3 class="bucket-name text-sm font-semibold text-gray-700">{bucket.name}</h3>
+                  <button
+                    data-bucket-id={bucket.id}
+                    data-bucket-name={bucket.name}
+                    class="rename-bucket-btn text-gray-400 hover:text-gray-600 focus:outline-none"
+                    aria-label={`Rename ${bucket.name}`}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                    </svg>
+                  </button>
                 </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+                <span class="bucket-group-count text-xs text-gray-400">{bqs.length} {bqs.length === 1 ? 'question' : 'questions'}</span>
+              </div>
+
+              <ul class="divide-y divide-gray-100">
+                {bqs.map((q) => (
+                  <li
+                    id={`question-${q.id}`}
+                    data-active={String(q.is_active)}
+                    data-bucket-id={String(q.bucket_id)}
+                    data-options={JSON.stringify(q.options.map((o) => ({ label: o.label, value: o.value })))}
+                    class:list={[
+                      'flex items-start justify-between gap-4 px-6 py-4 transition-colors',
+                      q.is_active ? 'bg-indigo-50' : 'hover:bg-gray-50',
+                    ]}
+                  >
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-center gap-2.5 flex-wrap">
+                        <span class="type-badge inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 capitalize">
+                          {q.type.replace('_', ' ')}
+                        </span>
+                        {q.is_active && (
+                          <span class="active-badge inline-flex items-center gap-1 rounded-md bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                            <span class="h-1.5 w-1.5 rounded-full bg-indigo-500" aria-hidden="true"></span>
+                            Active
+                          </span>
+                        )}
+                      </div>
+                      <p class="prompt-text mt-1.5 text-sm text-gray-900">{q.prompt}</p>
+                    </div>
+
+                    <div class="flex shrink-0 items-center gap-2">
+                      <button
+                        data-id={q.id}
+                        data-prompt={q.prompt}
+                        data-type={q.type}
+                        data-bucket-id={q.bucket_id}
+                        class="edit-btn rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1"
+                      >
+                        Edit
+                      </button>
+                      {q.is_active ? (
+                        <button
+                          data-id={q.id}
+                          data-action="deactivate"
+                          class="action-btn rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Deactivate
+                        </button>
+                      ) : (
+                        <button
+                          data-id={q.id}
+                          data-action="activate"
+                          class="action-btn rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Set Active
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+
+      </div>
 
       <!-- Links -->
       <div class="mt-6 flex gap-4 text-sm">
         <a href="/" class="text-indigo-600 hover:underline">← Survey page</a>
         <a href="/admin/responses" class="text-indigo-600 hover:underline">View responses →</a>
+        <a href="/admin/test" class="text-indigo-600 hover:underline">Simulator →</a>
       </div>
 
     </div>
   </main>
+
+  <!-- Bucket data for client -->
+  <script id="buckets-data" type="application/json" is:inline set:html={JSON.stringify(buckets)}></script>
+
+  <!-- Shared option-row template -->
+  <template id="option-row-tpl">
+    <li class="flex items-center gap-2">
+      <input type="text" placeholder="Label" class="option-label flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" required />
+      <input type="text" placeholder="Value" class="option-value w-32 rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500" required />
+      <button type="button" class="remove-option-btn text-gray-400 hover:text-red-500 p-1 focus:outline-none" aria-label="Remove option">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+        </svg>
+      </button>
+    </li>
+  </template>
+
+  <!-- ── Edit Modal ──────────────────────────────────────────────────────────── -->
+  <div id="edit-modal" hidden class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
+    <div class="w-full max-w-lg rounded-2xl bg-white shadow-xl">
+      <div class="border-b border-gray-100 px-6 py-4">
+        <h2 id="edit-modal-title" class="text-base font-semibold text-gray-900">Edit Question</h2>
+      </div>
+      <form id="edit-form" class="px-6 py-5 space-y-5">
+        <input type="hidden" id="edit-id" />
+        <div>
+          <label for="edit-bucket" class="block text-sm font-medium text-gray-700 mb-1">Thematic bucket</label>
+          <select id="edit-bucket" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"></select>
+        </div>
+        <div>
+          <label for="edit-prompt" class="block text-sm font-medium text-gray-700 mb-1">Question text</label>
+          <textarea id="edit-prompt" rows="3" required class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"></textarea>
+        </div>
+        <div>
+          <label for="edit-type" class="block text-sm font-medium text-gray-700 mb-1">Question type</label>
+          <select id="edit-type" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+            <option value="multiple_choice">Multiple choice</option>
+            <option value="select_all">Select all</option>
+            <option value="dropdown">Dropdown</option>
+            <option value="free_text">Free text</option>
+          </select>
+        </div>
+        <div id="edit-options-section">
+          <div class="flex items-center justify-between mb-2">
+            <label class="block text-sm font-medium text-gray-700">Options</label>
+            <button type="button" id="edit-add-option-btn" class="text-xs font-medium text-indigo-600 hover:text-indigo-500">+ Add option</button>
+          </div>
+          <ul id="edit-options-list" class="space-y-2"></ul>
+        </div>
+        <div class="flex justify-end gap-3 pt-1">
+          <button type="button" id="cancel-edit-btn" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-600 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1">Cancel</button>
+          <button type="submit" id="save-edit-btn" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Create Modal ────────────────────────────────────────────────────────── -->
+  <div id="create-modal" hidden class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="create-modal-title">
+    <div class="w-full max-w-lg rounded-2xl bg-white shadow-xl">
+      <div class="border-b border-gray-100 px-6 py-4">
+        <h2 id="create-modal-title" class="text-base font-semibold text-gray-900">New Question</h2>
+      </div>
+      <form id="create-form" class="px-6 py-5 space-y-5">
+        <div>
+          <label for="create-bucket" class="block text-sm font-medium text-gray-700 mb-1">Thematic bucket</label>
+          <select id="create-bucket" required class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"></select>
+        </div>
+        <div>
+          <label for="create-prompt" class="block text-sm font-medium text-gray-700 mb-1">Question text</label>
+          <textarea id="create-prompt" rows="3" required class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"></textarea>
+        </div>
+        <div>
+          <label for="create-type" class="block text-sm font-medium text-gray-700 mb-1">Question type</label>
+          <select id="create-type" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+            <option value="multiple_choice">Multiple choice</option>
+            <option value="select_all">Select all</option>
+            <option value="dropdown">Dropdown</option>
+            <option value="free_text">Free text</option>
+          </select>
+        </div>
+        <div id="create-options-section">
+          <div class="flex items-center justify-between mb-2">
+            <label class="block text-sm font-medium text-gray-700">Options</label>
+            <button type="button" id="create-add-option-btn" class="text-xs font-medium text-indigo-600 hover:text-indigo-500">+ Add option</button>
+          </div>
+          <ul id="create-options-list" class="space-y-2"></ul>
+        </div>
+        <div class="flex justify-end gap-3 pt-1">
+          <button type="button" id="cancel-create-btn" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-600 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1">Cancel</button>
+          <button type="submit" id="save-create-btn" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </Layout>
 
 <script>
+  // ── Data ───────────────────────────────────────────────────────────────────
+  const buckets = JSON.parse(document.getElementById('buckets-data')!.textContent!) as Array<{ id: number; name: string }>;
+  const bucketNameMap = new Map(buckets.map((b) => [b.id, b.name]));
+  const bucketOrder = buckets.map((b) => b.id);
+
+  // ── Toast ──────────────────────────────────────────────────────────────────
   const toast = document.getElementById('toast') as HTMLDivElement;
 
   function showToast(message: string, type: 'success' | 'error'): void {
@@ -112,19 +258,140 @@ const questions = await getAllQuestions();
     setTimeout(() => { toast.hidden = true; }, 3000);
   }
 
+  // ── Shared helpers ─────────────────────────────────────────────────────────
+  const optionRowTpl = document.getElementById('option-row-tpl') as HTMLTemplateElement;
+
+  function createOptionRow(label = '', value = ''): HTMLLIElement {
+    const frag = optionRowTpl.content.cloneNode(true) as DocumentFragment;
+    const row = frag.querySelector('li')!;
+    (row.querySelector('.option-label') as HTMLInputElement).value = label;
+    (row.querySelector('.option-value') as HTMLInputElement).value = value;
+    row.querySelector('.remove-option-btn')!.addEventListener('click', () => row.remove());
+    return row;
+  }
+
+  function collectOptions(list: HTMLUListElement): Array<{ label: string; value: string }> {
+    return Array.from(list.querySelectorAll<HTMLLIElement>('li')).map((row) => ({
+      label: (row.querySelector('.option-label') as HTMLInputElement).value.trim(),
+      value: (row.querySelector('.option-value') as HTMLInputElement).value.trim(),
+    })).filter((o) => o.label || o.value);
+  }
+
+  function toggleOptionsSection(typeSelect: HTMLSelectElement, section: HTMLElement, list: HTMLUListElement): void {
+    const isFreeText = typeSelect.value === 'free_text';
+    section.hidden = isFreeText;
+    list.querySelectorAll<HTMLInputElement>('input').forEach((inp) => { inp.required = !isFreeText; });
+  }
+
+  function populateBucketSelect(select: HTMLSelectElement, selectedId?: number): void {
+    select.innerHTML = buckets
+      .map((b) => `<option value="${b.id}"${b.id === selectedId ? ' selected' : ''}>${b.name}</option>`)
+      .join('');
+  }
+
+  // ── Bucket group DOM helpers ───────────────────────────────────────────────
+  const wrapper = document.getElementById('question-list-wrapper')!;
+
+  function getBucketGroup(bucketId: number): HTMLDivElement | null {
+    return wrapper.querySelector<HTMLDivElement>(`.bucket-group[data-bucket-id="${bucketId}"]`);
+  }
+
+  function updateGroupCount(bucketId: number): void {
+    const group = getBucketGroup(bucketId);
+    if (!group) return;
+    const count = group.querySelectorAll('li[id^="question-"]').length;
+    const counter = group.querySelector<HTMLSpanElement>('.bucket-group-count');
+    if (counter) counter.textContent = `${count} ${count === 1 ? 'question' : 'questions'}`;
+  }
+
+  function getOrCreateBucketGroup(bucketId: number): HTMLUListElement {
+    let group = getBucketGroup(bucketId);
+    if (!group) {
+      group = document.createElement('div');
+      group.className = 'bucket-group overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm';
+      group.dataset.bucketId = String(bucketId);
+      const bucketName = bucketNameMap.get(bucketId) ?? 'Unknown';
+      group.innerHTML = `
+        <div class="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-6 py-3">
+          <div class="flex items-center gap-2 min-w-0">
+            <h3 class="bucket-name text-sm font-semibold text-gray-700">${bucketName}</h3>
+            <button data-bucket-id="${bucketId}" data-bucket-name="${bucketName}"
+              class="rename-bucket-btn text-gray-400 hover:text-gray-600 focus:outline-none" aria-label="Rename ${bucketName}">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+              </svg>
+            </button>
+          </div>
+          <span class="bucket-group-count text-xs text-gray-400">0 questions</span>
+        </div>
+        <ul class="divide-y divide-gray-100"></ul>
+      `;
+
+      // Insert in bucket order
+      const existingGroups = Array.from(wrapper.querySelectorAll<HTMLDivElement>('.bucket-group'));
+      const insertIdx = bucketOrder.indexOf(bucketId);
+      let inserted = false;
+      for (const existing of existingGroups) {
+        if (bucketOrder.indexOf(Number(existing.dataset.bucketId)) > insertIdx) {
+          wrapper.insertBefore(group, existing);
+          inserted = true;
+          break;
+        }
+      }
+      if (!inserted) wrapper.appendChild(group);
+
+      document.getElementById('empty-state')?.remove();
+    }
+    return group.querySelector<HTMLUListElement>('ul')!;
+  }
+
+  function removeGroupIfEmpty(bucketId: number): void {
+    const group = getBucketGroup(bucketId);
+    if (group && group.querySelectorAll('li[id^="question-"]').length === 0) {
+      group.remove();
+      if (!wrapper.querySelector('.bucket-group')) {
+        const empty = document.createElement('div');
+        empty.id = 'empty-state';
+        empty.className = 'rounded-2xl border border-dashed border-gray-300 bg-white p-12 text-center text-sm text-gray-400';
+        empty.textContent = 'No questions yet. Create one to get started.';
+        wrapper.appendChild(empty);
+      }
+    }
+  }
+
+  function buildQuestionRow(q: { id: number; bucket_id: number; type: string; prompt: string }, options: Array<{ label: string; value: string }>): HTMLLIElement {
+    const li = document.createElement('li');
+    li.id = `question-${q.id}`;
+    li.dataset.active = 'false';
+    li.dataset.bucketId = String(q.bucket_id);
+    li.dataset.options = JSON.stringify(options);
+    li.className = 'flex items-start justify-between gap-4 px-6 py-4 transition-colors hover:bg-gray-50';
+    li.innerHTML = `
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-2.5 flex-wrap">
+          <span class="type-badge inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 capitalize">${q.type.replace('_', ' ')}</span>
+        </div>
+        <p class="prompt-text mt-1.5 text-sm text-gray-900">${q.prompt}</p>
+      </div>
+      <div class="flex shrink-0 items-center gap-2">
+        <button data-id="${q.id}" data-prompt="${q.prompt.replace(/"/g, '&quot;')}" data-type="${q.type}" data-bucket-id="${q.bucket_id}"
+          class="edit-btn rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1">Edit</button>
+        <button data-id="${q.id}" data-action="activate"
+          class="action-btn rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50">Set Active</button>
+      </div>
+    `;
+    return li;
+  }
+
+  // ── Activate / Deactivate ─────────────────────────────────────────────────
   function setRowActive(id: number, active: boolean): void {
-    const all = document.querySelectorAll<HTMLLIElement>('#question-list li');
-
-    for (const li of all) {
+    for (const li of document.querySelectorAll<HTMLLIElement>('li[id^="question-"]')) {
       const liId = Number(li.id.replace('question-', ''));
-      const isThis = liId === id;
-      const shouldBeActive = isThis && active;
+      const shouldBeActive = liId === id && active;
 
-      // Background
       li.classList.toggle('bg-indigo-50', shouldBeActive);
       li.classList.toggle('hover:bg-gray-50', !shouldBeActive);
 
-      // Active badge
       const existingBadge = li.querySelector('.active-badge');
       if (shouldBeActive && !existingBadge) {
         const badge = document.createElement('span');
@@ -135,10 +402,8 @@ const questions = await getAllQuestions();
         existingBadge.remove();
       }
 
-      // Button
       const btn = li.querySelector<HTMLButtonElement>('.action-btn');
       if (!btn) continue;
-
       if (shouldBeActive) {
         btn.dataset.action = 'deactivate';
         btn.textContent = 'Deactivate';
@@ -151,7 +416,7 @@ const questions = await getAllQuestions();
     }
   }
 
-  document.getElementById('question-list')?.addEventListener('click', async (e) => {
+  wrapper.addEventListener('click', async (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.action-btn');
     if (!btn) return;
 
@@ -159,9 +424,7 @@ const questions = await getAllQuestions();
     const action = btn.dataset.action as 'activate' | 'deactivate';
     const active = action === 'activate';
 
-    // Disable all buttons during request
-    const allBtns = document.querySelectorAll<HTMLButtonElement>('.action-btn');
-    allBtns.forEach((b) => { b.disabled = true; });
+    document.querySelectorAll<HTMLButtonElement>('.action-btn, .edit-btn').forEach((b) => { b.disabled = true; });
     btn.textContent = active ? 'Activating…' : 'Deactivating…';
 
     try {
@@ -170,31 +433,233 @@ const questions = await getAllQuestions();
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, active }),
       });
-
       const data = await res.json();
-
       if (!res.ok) {
         showToast(data.error ?? 'Something went wrong.', 'error');
-        // Re-enable buttons without changing state
-        allBtns.forEach((b) => { b.disabled = false; });
         btn.textContent = active ? 'Set Active' : 'Deactivate';
         return;
       }
-
       setRowActive(id, active);
-      showToast(
-        active ? 'Question is now active.' : 'Question deactivated.',
-        'success'
-      );
+      showToast(active ? 'Question is now active.' : 'Question deactivated.', 'success');
     } catch {
       showToast('Network error. Please try again.', 'error');
-      allBtns.forEach((b) => { b.disabled = false; });
       btn.textContent = active ? 'Set Active' : 'Deactivate';
     } finally {
-      // Re-enable all buttons (setRowActive already set correct labels for success case)
-      document.querySelectorAll<HTMLButtonElement>('.action-btn').forEach((b) => {
-        b.disabled = false;
-      });
+      document.querySelectorAll<HTMLButtonElement>('.action-btn, .edit-btn').forEach((b) => { b.disabled = false; });
     }
+  });
+
+  // ── Edit Modal ─────────────────────────────────────────────────────────────
+  const editModal       = document.getElementById('edit-modal') as HTMLDivElement;
+  const editForm        = document.getElementById('edit-form') as HTMLFormElement;
+  const editIdInput     = document.getElementById('edit-id') as HTMLInputElement;
+  const editBucketSel   = document.getElementById('edit-bucket') as HTMLSelectElement;
+  const editPromptInput = document.getElementById('edit-prompt') as HTMLTextAreaElement;
+  const editTypeSelect  = document.getElementById('edit-type') as HTMLSelectElement;
+  const editOptSection  = document.getElementById('edit-options-section') as HTMLDivElement;
+  const editOptList     = document.getElementById('edit-options-list') as HTMLUListElement;
+  const saveEditBtn     = document.getElementById('save-edit-btn') as HTMLButtonElement;
+
+  populateBucketSelect(editBucketSel);
+  editTypeSelect.addEventListener('change', () => toggleOptionsSection(editTypeSelect, editOptSection, editOptList));
+  document.getElementById('edit-add-option-btn')!.addEventListener('click', () => editOptList.appendChild(createOptionRow()));
+  document.getElementById('cancel-edit-btn')!.addEventListener('click', () => { editModal.hidden = true; });
+  editModal.addEventListener('click', (e) => { if (e.target === editModal) editModal.hidden = true; });
+
+  wrapper.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.edit-btn');
+    if (!btn) return;
+
+    const li = btn.closest<HTMLLIElement>('li')!;
+    editIdInput.value = btn.dataset.id!;
+    populateBucketSelect(editBucketSel, Number(btn.dataset.bucketId));
+    editPromptInput.value = btn.dataset.prompt ?? '';
+    editTypeSelect.value = btn.dataset.type ?? 'multiple_choice';
+    editOptList.innerHTML = '';
+    for (const opt of JSON.parse(li.dataset.options ?? '[]') as Array<{ label: string; value: string }>) {
+      editOptList.appendChild(createOptionRow(opt.label, opt.value));
+    }
+    toggleOptionsSection(editTypeSelect, editOptSection, editOptList);
+    editModal.hidden = false;
+    editPromptInput.focus();
+  });
+
+  editForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = Number(editIdInput.value);
+    const bucket_id = Number(editBucketSel.value);
+    const prompt = editPromptInput.value.trim();
+    const type = editTypeSelect.value;
+    const options = type !== 'free_text' ? collectOptions(editOptList) : [];
+
+    saveEditBtn.disabled = true;
+    saveEditBtn.textContent = 'Saving…';
+    try {
+      const res = await fetch('/api/questions/edit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, bucket_id, prompt, type, options }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error ?? 'Something went wrong.', 'error'); return; }
+
+      const li = document.getElementById(`question-${id}`)!;
+      const oldBucketId = Number(li.dataset.bucketId);
+
+      // Update row content
+      li.querySelector('.prompt-text')!.textContent = prompt;
+      li.querySelector('.type-badge')!.textContent = type.replace('_', ' ');
+      li.dataset.options = JSON.stringify(options);
+      li.dataset.bucketId = String(bucket_id);
+      const editBtn = li.querySelector<HTMLButtonElement>('.edit-btn')!;
+      editBtn.dataset.prompt = prompt;
+      editBtn.dataset.type = type;
+      editBtn.dataset.bucketId = String(bucket_id);
+
+      // Move to new bucket group if changed
+      if (bucket_id !== oldBucketId) {
+        const newList = getOrCreateBucketGroup(bucket_id);
+        newList.appendChild(li);
+        updateGroupCount(bucket_id);
+        removeGroupIfEmpty(oldBucketId);
+      }
+
+      editModal.hidden = true;
+      showToast('Question updated.', 'success');
+    } catch {
+      showToast('Network error. Please try again.', 'error');
+    } finally {
+      saveEditBtn.disabled = false;
+      saveEditBtn.textContent = 'Save';
+    }
+  });
+
+  // ── Create Modal ───────────────────────────────────────────────────────────
+  const createModal       = document.getElementById('create-modal') as HTMLDivElement;
+  const createForm        = document.getElementById('create-form') as HTMLFormElement;
+  const createBucketSel   = document.getElementById('create-bucket') as HTMLSelectElement;
+  const createPromptInput = document.getElementById('create-prompt') as HTMLTextAreaElement;
+  const createTypeSelect  = document.getElementById('create-type') as HTMLSelectElement;
+  const createOptSection  = document.getElementById('create-options-section') as HTMLDivElement;
+  const createOptList     = document.getElementById('create-options-list') as HTMLUListElement;
+  const saveCreateBtn     = document.getElementById('save-create-btn') as HTMLButtonElement;
+
+  populateBucketSelect(createBucketSel);
+  createTypeSelect.addEventListener('change', () => toggleOptionsSection(createTypeSelect, createOptSection, createOptList));
+  document.getElementById('create-add-option-btn')!.addEventListener('click', () => createOptList.appendChild(createOptionRow()));
+  document.getElementById('cancel-create-btn')!.addEventListener('click', () => { createModal.hidden = true; });
+  createModal.addEventListener('click', (e) => { if (e.target === createModal) createModal.hidden = true; });
+
+  document.getElementById('new-question-btn')!.addEventListener('click', () => {
+    createForm.reset();
+    createOptList.innerHTML = '';
+    populateBucketSelect(createBucketSel);
+    toggleOptionsSection(createTypeSelect, createOptSection, createOptList);
+    createModal.hidden = false;
+    createPromptInput.focus();
+  });
+
+  createForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const bucket_id = Number(createBucketSel.value);
+    const prompt = createPromptInput.value.trim();
+    const type = createTypeSelect.value;
+    const options = type !== 'free_text' ? collectOptions(createOptList) : [];
+
+    saveCreateBtn.disabled = true;
+    saveCreateBtn.textContent = 'Creating…';
+    try {
+      const res = await fetch('/api/questions/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bucket_id, prompt, type, options }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error ?? 'Something went wrong.', 'error'); return; }
+
+      const q = data.question as { id: number; bucket_id: number; type: string; prompt: string };
+      const savedOptions = (data.options ?? []) as Array<{ label: string; value: string }>;
+
+      const ul = getOrCreateBucketGroup(q.bucket_id);
+      ul.appendChild(buildQuestionRow(q, savedOptions));
+      updateGroupCount(q.bucket_id);
+
+      createModal.hidden = true;
+      showToast('Question created.', 'success');
+    } catch {
+      showToast('Network error. Please try again.', 'error');
+    } finally {
+      saveCreateBtn.disabled = false;
+      saveCreateBtn.textContent = 'Create';
+    }
+  });
+
+  // ── Rename bucket (inline) ────────────────────────────────────────────────
+  wrapper.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.rename-bucket-btn');
+    if (!btn) return;
+    // btn is non-null from here; assert to satisfy TS inside closures
+    const safeBtn = btn;
+
+    const header = btn.closest<HTMLDivElement>('.flex.items-center.gap-2.min-w-0')!;
+    const nameEl = header.querySelector<HTMLHeadingElement>('.bucket-name')!;
+    const bucketId = Number(btn.dataset.bucketId);
+    const currentName = nameEl.textContent ?? '';
+
+    // Replace name + pencil with an input
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = currentName;
+    input.className = 'bucket-name-input rounded border border-indigo-400 px-2 py-0.5 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-48';
+
+    header.replaceChildren(input);
+    input.focus();
+    input.select();
+
+    function restore(): void {
+      header.replaceChildren(nameEl, safeBtn);
+    }
+
+    async function save(): Promise<void> {
+      const newName = input.value.trim();
+      if (!newName || newName === currentName) { restore(); return; }
+
+      input.disabled = true;
+      try {
+        const res = await fetch('/api/buckets/edit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: bucketId, name: newName }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showToast(data.error ?? 'Something went wrong.', 'error');
+          restore();
+          return;
+        }
+        // Update name element and button data attribute
+        nameEl.textContent = newName;
+        safeBtn.dataset.bucketName = newName;
+        bucketNameMap.set(bucketId, newName);
+        restore();
+        showToast('Bucket renamed.', 'success');
+      } catch {
+        showToast('Network error. Please try again.', 'error');
+        restore();
+      }
+    }
+
+    input.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') { ev.preventDefault(); save(); }
+      if (ev.key === 'Escape') { restore(); }
+    });
+    input.addEventListener('blur', () => { save(); }, { once: true });
+  });
+
+  // ── Global Escape ──────────────────────────────────────────────────────────
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (!editModal.hidden) editModal.hidden = true;
+    else if (!createModal.hidden) createModal.hidden = true;
   });
 </script>
