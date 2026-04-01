@@ -58,8 +58,10 @@ export async function getAllQuestionsWithOptions(): Promise<QuestionWithOptions[
   }));
 }
 
-// Fetch the currently active question with its options
-export async function getActiveQuestion(): Promise<QuestionWithOptions | null> {
+export type ActiveQuestion = QuestionWithOptions & { bucketName: string };
+
+// Fetch the currently active question with its options and bucket name
+export async function getActiveQuestion(): Promise<ActiveQuestion | null> {
   const { data: question, error } = await supabase
     .from('questions')
     .select('*')
@@ -68,15 +70,15 @@ export async function getActiveQuestion(): Promise<QuestionWithOptions | null> {
 
   if (error || !question) return null;
 
-  const { data: options } = await supabase
-    .from('options')
-    .select('*')
-    .eq('question_id', question.id)
-    .order('display_order');
+  const [{ data: options }, { data: bucket }] = await Promise.all([
+    supabase.from('options').select('*').eq('question_id', question.id).order('display_order'),
+    supabase.from('thematic_buckets').select('name').eq('id', (question as Question).bucket_id).single(),
+  ]);
 
   return {
     ...(question as Question),
     options: ((options ?? []) as Option[]).sort((a, b) => a.display_order - b.display_order),
+    bucketName: (bucket as { name: string } | null)?.name ?? '',
   };
 }
 

@@ -61,9 +61,7 @@ const question = await getActiveQuestion();
                 </div>
               </div>
 
-              <QuestionCard question={question} />
-                
-              </div>
+              <QuestionCard question={question} bucketName={question.bucketName} />
             </form>
           </div>
 

@@ -6,9 +6,10 @@ interface Props {
   rows?: number;
   labelId?: string;
   required?: boolean;
+  inputFocusClass?: string;
 }
 
-const { name, value, placeholder = 'Your answer…', rows = 4, labelId, required = false } = Astro.props;
+const { name, value, placeholder = 'Your answer…', rows = 4, labelId, required = false, inputFocusClass = 'focus:border-violet-500/60 focus:ring-violet-500/30' } = Astro.props;
 ---
 
 <textarea
@@ -17,5 +18,5 @@ const { name, value, placeholder = 'Your answer…', rows = 4, labelId, required
   placeholder={placeholder}
   aria-labelledby={labelId}
   aria-required={required ? 'true' : undefined}
-  class="w-full resize-y rounded-xl border border-white/15 bg-white/8 px-4 py-2.5 text-sm text-white shadow-sm backdrop-blur-sm placeholder:text-white/30 transition-colors focus:border-violet-500/60 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
+  class:list={["w-full resize-y rounded-xl border border-white/15 bg-white/8 px-4 py-2.5 text-sm text-white shadow-sm backdrop-blur-sm placeholder:text-white/30 transition-colors focus:outline-none focus:ring-2", inputFocusClass]}
 >{value ?? ''}</textarea>

@@ -8,9 +8,10 @@ interface Props {
   placeholder?: string;
   labelId?: string;
   required?: boolean;
+  inputFocusClass?: string;
 }
 
-const { name, options, value, placeholder = 'Select an option…', labelId, required = false } = Astro.props;
+const { name, options, value, placeholder = 'Select an option…', labelId, required = false, inputFocusClass = 'focus:border-violet-500/60 focus:ring-violet-500/30' } = Astro.props;
 ---
 
 <div class="relative">
@@ -18,7 +19,7 @@ const { name, options, value, placeholder = 'Select an option…', labelId, requ
     name={name}
     aria-labelledby={labelId}
     aria-required={required ? 'true' : undefined}
-    class="w-full appearance-none rounded-xl border border-white/15 bg-white/8 px-4 py-2.5 pr-10 text-sm text-white shadow-sm backdrop-blur-sm transition-colors focus:border-violet-500/60 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
+    class:list={["w-full appearance-none rounded-xl border border-white/15 bg-white/8 px-4 py-2.5 pr-10 text-sm text-white shadow-sm backdrop-blur-sm transition-colors focus:outline-none focus:ring-2", inputFocusClass]}
   >
     <option value="" disabled selected={!value} class="bg-gray-900 text-white/60">{placeholder}</option>
     {options.map((option) => (
