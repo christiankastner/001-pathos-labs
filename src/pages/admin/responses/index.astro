@@ -1,5 +1,5 @@
 ---
-import Layout from '../../../layouts/Layout.astro';
+import Layout from '../../../layouts/AdminLayout.astro';
 import { getResponses, getLookupMaps } from '../../../lib/supabase';
 
 const [rows, lookupMaps] = await Promise.all([getResponses(), getLookupMaps()]);
@@ -41,6 +41,12 @@ const existingSessionIds = [...new Set(rows.map((r) => r.session_id))];
           >
             Export CSV
           </button>
+          <button
+            id="clear-all"
+            class="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-600 shadow-sm hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+          >
+            Clear All
+          </button>
         </div>
       </div>
 
@@ -52,7 +58,7 @@ const existingSessionIds = [...new Set(rows.map((r) => r.session_id))];
           </label>
           <select
             id="question-filter"
-            class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
           >
             <option value="">All questions</option>
             {questions.map((q) => (
@@ -259,5 +265,31 @@ const existingSessionIds = [...new Set(rows.map((r) => r.session_id))];
     a.download = 'responses.csv';
     a.click();
     URL.revokeObjectURL(url);
+  });
+
+  // ── Clear all responses ──────────────────────────────────────────────────────
+  document.getElementById('clear-all')?.addEventListener('click', async () => {
+    if (!confirm('Delete all responses? This cannot be undone.')) return;
+
+    const res = await fetch('/api/answers/clear-all', { method: 'POST' });
+    if (!res.ok) {
+      const { error } = await res.json();
+      alert(`Failed to clear responses: ${error}`);
+      return;
+    }
+
+    // Clear the table and reset counts
+    const tbody = document.getElementById('responses-tbody')!;
+    tbody.innerHTML = `
+      <tr id="empty-row">
+        <td colspan="3" class="px-5 py-12 text-center text-gray-400">
+          No responses yet. Waiting for live updates…
+        </td>
+      </tr>`;
+    knownSessions.clear();
+    updateCounts();
+
+    // Reset question filter
+    if (filter) filter.value = '';
   });
 </script>
