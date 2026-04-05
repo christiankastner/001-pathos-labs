@@ -16,15 +16,18 @@ export const POST: APIRoute = async ({ request }) => {
     return json({ error: 'Invalid JSON.' }, 400);
   }
 
-  const { id, name } = body as { id?: unknown; name?: unknown };
+  const { id, name, display_order } = body as { id?: unknown; name?: unknown; display_order?: unknown };
 
   if (typeof id !== 'number' || typeof name !== 'string' || !name.trim()) {
     return json({ error: 'id (number) and name (string) are required.' }, 400);
   }
 
+  const update: Record<string, unknown> = { name: name.trim() };
+  if (typeof display_order === 'number') update.display_order = display_order;
+
   const { error } = await supabase
     .from('thematic_buckets')
-    .update({ name: name.trim() })
+    .update(update)
     .eq('id', id);
 
   if (error) {

@@ -4,6 +4,7 @@ export interface ThematicBucket {
   id: number;
   name: string;
   description: string | null;
+  display_order: number;
 }
 
 export interface Question {

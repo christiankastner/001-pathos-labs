@@ -12,12 +12,13 @@ export const POST: APIRoute = async ({ request }) => {
     return new Response(JSON.stringify({ error: 'Invalid JSON.' }), { status: 400 });
   }
 
-  const { id, bucket_id, prompt, type, options } = body as {
+  const { id, bucket_id, prompt, type, options, display_order } = body as {
     id: number;
     bucket_id?: number;
     prompt: string;
     type: QuestionType;
     options: Array<{ label: string; value: string }>;
+    display_order?: number;
   };
 
   if (!id || typeof prompt !== 'string' || !prompt.trim()) {
@@ -36,6 +37,7 @@ export const POST: APIRoute = async ({ request }) => {
   // Update question
   const update: Record<string, unknown> = { prompt: prompt.trim(), type };
   if (bucket_id) update.bucket_id = bucket_id;
+  if (typeof display_order === 'number') update.display_order = display_order;
 
   const { error: updateError } = await supabase
     .from('questions')
