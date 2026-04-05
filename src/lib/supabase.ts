@@ -18,12 +18,12 @@ const supabaseKey = import.meta.env.SUPABASE_KEY as string;
 // All query results are cast to our explicit app-layer types at the call site.
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Fetch all thematic buckets ordered by id
+// Fetch all thematic buckets ordered by display_order
 export async function getAllBuckets(): Promise<ThematicBucket[]> {
   const { data } = await supabase
     .from('thematic_buckets')
     .select('*')
-    .order('id');
+    .order('display_order');
 
   return (data ?? []) as ThematicBucket[];
 }
@@ -41,7 +41,7 @@ export async function getAllQuestions(): Promise<Question[]> {
 // Fetch all questions with their options, ordered by id
 export async function getAllQuestionsWithOptions(): Promise<QuestionWithOptions[]> {
   const [{ data: questions }, { data: options }] = await Promise.all([
-    supabase.from('questions').select('*').order('id'),
+    supabase.from('questions').select('*').order('display_order'),
     supabase.from('options').select('*').order('display_order'),
   ]);
 
