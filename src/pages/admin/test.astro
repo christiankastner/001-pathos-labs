@@ -17,7 +17,7 @@ const question = await getActiveQuestion();
         <p class="text-sm font-medium text-indigo-600">Admin</p>
         <h1 class="mt-1 text-2xl font-bold text-gray-900">Response Simulator</h1>
         <p class="mt-1 text-sm text-gray-500">
-          Simulates 100 people submitting the active question over a 5-minute window.
+          Simulates responses to the active question over a configurable time window.
         </p>
       </div>
 
@@ -42,6 +42,33 @@ const question = await getActiveQuestion();
                 ))}
               </ul>
             )}
+          </div>
+
+          <!-- Parameters -->
+          <div class="mb-6 grid grid-cols-2 gap-4">
+            <div>
+              <label for="param-total" class="block text-xs font-medium text-gray-600 mb-1">Number of responses</label>
+              <input
+                id="param-total"
+                type="number"
+                min="1"
+                max="10000"
+                value="100"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label for="param-window" class="block text-xs font-medium text-gray-600 mb-1">Time window (minutes)</label>
+              <input
+                id="param-window"
+                type="number"
+                min="0.1"
+                max="60"
+                step="0.1"
+                value="5"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
           </div>
 
           <!-- Controls -->
@@ -121,8 +148,8 @@ const question = await getActiveQuestion();
     const sbKey     = script.dataset.supabaseKey;
     const question  = JSON.parse(script.dataset.question);
 
-    const TOTAL        = 100;
-    const WINDOW_MS    = 5 * 60 * 1000; // 5 minutes
+    const paramTotal  = document.getElementById('param-total');
+    const paramWindow = document.getElementById('param-window');
 
     // ── Supabase minimal client (no SDK needed — plain fetch) ────────────────
     async function upsertRow(table, row) {
@@ -197,13 +224,15 @@ const question = await getActiveQuestion();
     let startTime = null;
     let tickInterval = null;
 
+    let currentTotal     = 100;
+    let currentWindowMs  = 5 * 60 * 1000;
+
     function updateProgress() {
-      const pct = (submitted / TOTAL) * 100;
+      const pct = (submitted / currentTotal) * 100;
       progressBar.style.width = `${pct}%`;
-      progressLabel.textContent = `${submitted} / ${TOTAL} submitted${errors > 0 ? ` (${errors} failed)` : ''}`;
+      progressLabel.textContent = `${submitted} / ${currentTotal} submitted${errors > 0 ? ` (${errors} failed)` : ''}`;
       if (startTime) {
-        const elapsed = Math.floor((Date.now() - startTime) / 1000);
-        const remaining = Math.max(0, Math.ceil((WINDOW_MS - (Date.now() - startTime)) / 1000));
+        const remaining = Math.max(0, Math.ceil((currentWindowMs - (Date.now() - startTime)) / 1000));
         timeLabel.textContent = remaining > 0 ? `${remaining}s remaining` : 'window closed';
       }
     }
@@ -246,6 +275,8 @@ const question = await getActiveQuestion();
       timers.forEach(clearTimeout);
       timers = [];
       clearInterval(tickInterval);
+      paramTotal.disabled  = false;
+      paramWindow.disabled = false;
       startBtn.disabled = false;
       startBtn.hidden   = false;
       stopBtn.hidden    = true;
@@ -253,11 +284,18 @@ const question = await getActiveQuestion();
     }
 
     function startSimulation() {
+      const TOTAL     = Math.max(1, parseInt(paramTotal.value, 10) || 100);
+      const WINDOW_MS = Math.max(0.1, parseFloat(paramWindow.value) || 5) * 60 * 1000;
+      currentTotal    = TOTAL;
+      currentWindowMs = WINDOW_MS;
+
       submitted = 0;
       errors    = 0;
       startTime = Date.now();
       logList.innerHTML = '';
 
+      paramTotal.disabled  = true;
+      paramWindow.disabled = true;
       startBtn.disabled = true;
       startBtn.hidden   = true;
       stopBtn.hidden    = false;
@@ -267,7 +305,7 @@ const question = await getActiveQuestion();
 
       updateProgress();
 
-      // Generate 100 random offsets within the window and sort them
+      // Generate random offsets within the window and sort them
       const offsets = Array.from({ length: TOTAL }, () => Math.random() * WINDOW_MS);
       offsets.sort((a, b) => a - b);
 
