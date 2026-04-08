@@ -5,6 +5,8 @@ export interface ThematicBucket {
   name: string;
   description: string | null;
   display_order: number;
+  yes_color: string;
+  no_color: string;
 }
 
 export interface Question {
@@ -68,7 +70,7 @@ export interface Database {
     Tables: {
       thematic_buckets: {
         Row: ThematicBucket;
-        Insert: Omit<ThematicBucket, 'id'>;
+        Insert: Omit<ThematicBucket, 'id'> & { yes_color?: string; no_color?: string };
         Update: Partial<Omit<ThematicBucket, 'id'>>;
         Relationships: [];
       };

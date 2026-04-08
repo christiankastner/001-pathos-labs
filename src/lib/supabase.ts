@@ -58,7 +58,7 @@ export async function getAllQuestionsWithOptions(): Promise<QuestionWithOptions[
   }));
 }
 
-export type ActiveQuestion = QuestionWithOptions & { bucketName: string };
+export type ActiveQuestion = QuestionWithOptions & { bucketName: string; bucketYesColor: string; bucketNoColor: string };
 
 // Fetch the currently active question with its options and bucket name
 export async function getActiveQuestion(): Promise<ActiveQuestion | null> {
@@ -72,13 +72,16 @@ export async function getActiveQuestion(): Promise<ActiveQuestion | null> {
 
   const [{ data: options }, { data: bucket }] = await Promise.all([
     supabase.from('options').select('*').eq('question_id', question.id).order('display_order'),
-    supabase.from('thematic_buckets').select('name').eq('id', (question as Question).bucket_id).single(),
+    supabase.from('thematic_buckets').select('name, yes_color, no_color').eq('id', (question as Question).bucket_id).single(),
   ]);
 
+  const b = bucket as { name: string; yes_color: string; no_color: string } | null;
   return {
     ...(question as Question),
     options: ((options ?? []) as Option[]).sort((a, b) => a.display_order - b.display_order),
-    bucketName: (bucket as { name: string } | null)?.name ?? '',
+    bucketName: b?.name ?? '',
+    bucketYesColor: b?.yes_color ?? '#22c55e',
+    bucketNoColor: b?.no_color ?? '#ef4444',
   };
 }
 

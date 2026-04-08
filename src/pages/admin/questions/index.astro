@@ -57,6 +57,8 @@ const bucketsWithQuestions = buckets.filter((b) => (questionsByBucket.get(b.id)?
                     data-bucket-id={bucket.id}
                     data-bucket-name={bucket.name}
                     data-display-order={bucket.display_order}
+                    data-yes-color={bucket.yes_color}
+                    data-no-color={bucket.no_color}
                     class="rename-bucket-btn text-gray-400 hover:text-gray-600 focus:outline-none"
                     aria-label={`Rename ${bucket.name}`}
                   >
@@ -64,6 +66,9 @@ const bucketsWithQuestions = buckets.filter((b) => (questionsByBucket.get(b.id)?
                       <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
                     </svg>
                   </button>
+                  <!-- Yes/No color swatches -->
+                  <span class="bucket-yes-swatch inline-block h-3 w-3 rounded-full ring-1 ring-black/10" style={`background:${bucket.yes_color}`} title={`Yes: ${bucket.yes_color}`}></span>
+                  <span class="bucket-no-swatch  inline-block h-3 w-3 rounded-full ring-1 ring-black/10" style={`background:${bucket.no_color}`}  title={`No: ${bucket.no_color}`}></span>
                 </div>
                 <div class="flex items-center gap-3">
                   <span class="bucket-order text-xs text-gray-400 tabular-nums">#{bucket.display_order}</span>
@@ -252,7 +257,7 @@ const bucketsWithQuestions = buckets.filter((b) => (questionsByBucket.get(b.id)?
 
 <script>
   // ── Data ───────────────────────────────────────────────────────────────────
-  const buckets = JSON.parse(document.getElementById('buckets-data')!.textContent!) as Array<{ id: number; name: string }>;
+  const buckets = JSON.parse(document.getElementById('buckets-data')!.textContent!) as Array<{ id: number; name: string; yes_color: string; no_color: string }>;
   const bucketNameMap = new Map(buckets.map((b) => [b.id, b.name]));
   const bucketOrder = buckets.map((b) => b.id);
 
@@ -624,12 +629,16 @@ const bucketsWithQuestions = buckets.filter((b) => (questionsByBucket.get(b.id)?
     const header = btn.closest<HTMLDivElement>('.flex.items-center.gap-2.min-w-0')!;
     const bucketHeader = btn.closest<HTMLDivElement>('.flex.items-center.justify-between')!;
     const nameEl = header.querySelector<HTMLHeadingElement>('.bucket-name')!;
+    const yesSwatch = header.querySelector<HTMLSpanElement>('.bucket-yes-swatch')!;
+    const noSwatch  = header.querySelector<HTMLSpanElement>('.bucket-no-swatch')!;
     const orderEl = bucketHeader.querySelector<HTMLSpanElement>('.bucket-order')!;
     const bucketId = Number(btn.dataset.bucketId);
     const currentName = nameEl.textContent ?? '';
     const currentOrder = Number(btn.dataset.displayOrder ?? '0');
+    const currentYesColor = btn.dataset.yesColor ?? '#22c55e';
+    const currentNoColor  = btn.dataset.noColor  ?? '#ef4444';
 
-    // Replace name + pencil with inputs for name and order
+    // Replace name + pencil with inputs for name, order, and colors
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
     nameInput.value = currentName;
@@ -641,27 +650,50 @@ const bucketsWithQuestions = buckets.filter((b) => (questionsByBucket.get(b.id)?
     orderInput.className = 'rounded border border-indigo-400 px-2 py-0.5 text-xs text-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-14';
     orderInput.min = '0';
 
-    header.replaceChildren(nameInput, orderInput);
+    const yesColorInput = document.createElement('input');
+    yesColorInput.type = 'color';
+    yesColorInput.value = currentYesColor;
+    yesColorInput.title = 'Yes color';
+    yesColorInput.className = 'h-6 w-6 cursor-pointer rounded border border-indigo-400 p-0';
+
+    const noColorInput = document.createElement('input');
+    noColorInput.type = 'color';
+    noColorInput.value = currentNoColor;
+    noColorInput.title = 'No color';
+    noColorInput.className = 'h-6 w-6 cursor-pointer rounded border border-indigo-400 p-0';
+
+    header.replaceChildren(nameInput, orderInput, yesColorInput, noColorInput);
     nameInput.focus();
     nameInput.select();
 
     function restore(): void {
-      header.replaceChildren(nameEl, safeBtn);
+      header.replaceChildren(nameEl, safeBtn, yesSwatch, noSwatch);
     }
 
     async function save(): Promise<void> {
-      const newName = nameInput.value.trim();
-      const newOrder = Number(orderInput.value);
-      const unchanged = (!newName || newName === currentName) && newOrder === currentOrder;
+      const newName     = nameInput.value.trim();
+      const newOrder    = Number(orderInput.value);
+      const newYesColor = yesColorInput.value;
+      const newNoColor  = noColorInput.value;
+      const unchanged = (!newName || newName === currentName) && newOrder === currentOrder
+        && newYesColor === currentYesColor && newNoColor === currentNoColor;
       if (unchanged) { restore(); return; }
 
       nameInput.disabled = true;
       orderInput.disabled = true;
+      yesColorInput.disabled = true;
+      noColorInput.disabled = true;
       try {
         const res = await fetch('/api/buckets/edit', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: bucketId, name: newName || currentName, display_order: newOrder }),
+          body: JSON.stringify({
+            id: bucketId,
+            name: newName || currentName,
+            display_order: newOrder,
+            yes_color: newYesColor,
+            no_color: newNoColor,
+          }),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -672,7 +704,13 @@ const bucketsWithQuestions = buckets.filter((b) => (questionsByBucket.get(b.id)?
         nameEl.textContent = newName || currentName;
         safeBtn.dataset.bucketName = newName || currentName;
         safeBtn.dataset.displayOrder = String(newOrder);
+        safeBtn.dataset.yesColor = newYesColor;
+        safeBtn.dataset.noColor  = newNoColor;
         orderEl.textContent = `#${newOrder}`;
+        yesSwatch.style.background = newYesColor;
+        yesSwatch.title = `Yes: ${newYesColor}`;
+        noSwatch.style.background  = newNoColor;
+        noSwatch.title  = `No: ${newNoColor}`;
         bucketNameMap.set(bucketId, newName || currentName);
         restore();
         showToast('Bucket updated.', 'success');
@@ -690,14 +728,18 @@ const bucketsWithQuestions = buckets.filter((b) => (questionsByBucket.get(b.id)?
       if (ev.key === 'Enter') { ev.preventDefault(); save(); }
       if (ev.key === 'Escape') { restore(); }
     });
-    // Save when both inputs have lost focus
+    // Save when all inputs have lost focus
     let blurTimer: ReturnType<typeof setTimeout>;
-    const onBlur = () => { blurTimer = setTimeout(save, 100); };
+    const onBlur = () => { blurTimer = setTimeout(save, 150); };
     const onFocus = () => { clearTimeout(blurTimer); };
     nameInput.addEventListener('blur', onBlur);
     orderInput.addEventListener('blur', onBlur);
+    yesColorInput.addEventListener('blur', onBlur);
+    noColorInput.addEventListener('blur', onBlur);
     nameInput.addEventListener('focus', onFocus);
     orderInput.addEventListener('focus', onFocus);
+    yesColorInput.addEventListener('focus', onFocus);
+    noColorInput.addEventListener('focus', onFocus);
   });
 
   // ── Global Escape ──────────────────────────────────────────────────────────
