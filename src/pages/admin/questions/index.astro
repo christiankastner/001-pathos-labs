@@ -118,6 +118,12 @@ const bucketsWithQuestions = buckets.filter((b) => (questionsByBucket.get(b.id)?
                       >
                         Edit
                       </button>
+                      <button
+                        data-id={q.id}
+                        class="delete-btn rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-500 shadow-sm hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Delete
+                      </button>
                       {q.is_active ? (
                         <button
                           data-id={q.id}
@@ -394,6 +400,8 @@ const bucketsWithQuestions = buckets.filter((b) => (questionsByBucket.get(b.id)?
       <div class="flex shrink-0 items-center gap-2">
         <button data-id="${q.id}" data-prompt="${q.prompt.replace(/"/g, '&quot;')}" data-type="${q.type}" data-bucket-id="${q.bucket_id}"
           class="edit-btn rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1">Edit</button>
+        <button data-id="${q.id}"
+          class="delete-btn rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-500 shadow-sm hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50">Delete</button>
         <button data-id="${q.id}" data-action="activate"
           class="action-btn rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50">Set Active</button>
       </div>
@@ -465,6 +473,46 @@ const bucketsWithQuestions = buckets.filter((b) => (questionsByBucket.get(b.id)?
       btn.textContent = active ? 'Set Active' : 'Deactivate';
     } finally {
       document.querySelectorAll<HTMLButtonElement>('.action-btn, .edit-btn').forEach((b) => { b.disabled = false; });
+    }
+  });
+
+  // ── Delete ────────────────────────────────────────────────────────────────
+  wrapper.addEventListener('click', async (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.delete-btn');
+    if (!btn) return;
+
+    const id = Number(btn.dataset.id);
+    const li = document.getElementById(`question-${id}`);
+    const promptText = li?.querySelector<HTMLElement>('.prompt-text')?.textContent ?? 'this question';
+    if (!confirm(`Delete "${promptText}"? This cannot be undone.`)) return;
+
+    document.querySelectorAll<HTMLButtonElement>('.action-btn, .edit-btn, .delete-btn').forEach((b) => { b.disabled = true; });
+    btn.textContent = 'Deleting…';
+
+    try {
+      const res = await fetch('/api/questions/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error ?? 'Something went wrong.', 'error');
+        btn.textContent = 'Delete';
+        return;
+      }
+      const bucketId = Number(li?.dataset.bucketId);
+      li?.remove();
+      if (bucketId) {
+        updateGroupCount(bucketId);
+        removeGroupIfEmpty(bucketId);
+      }
+      showToast('Question deleted.', 'success');
+    } catch {
+      showToast('Network error. Please try again.', 'error');
+      btn.textContent = 'Delete';
+    } finally {
+      document.querySelectorAll<HTMLButtonElement>('.action-btn, .edit-btn, .delete-btn').forEach((b) => { b.disabled = false; });
     }
   });
 

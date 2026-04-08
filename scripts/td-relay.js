@@ -15,6 +15,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { WebSocketServer, WebSocket } from 'ws';
 
+console.log('hello')
+
 // ── Config ────────────────────────────────────────────────────────────────────
 const SUPABASE_URL           = process.env.PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY      = process.env.PUBLIC_SUPABASE_KEY;
