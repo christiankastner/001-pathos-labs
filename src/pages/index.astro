@@ -122,6 +122,26 @@ const question = await getActiveQuestion();
     })
     .subscribe();
 
+  // ── Visibility: re-check active question when page becomes visible again ──
+  // (WebSocket drops when device sleeps; this catches missed changes on wake)
+  const currentQuestionId = (document.getElementById('survey-form') as HTMLFormElement | null)
+    ?.dataset.questionId ?? null;
+
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState !== 'visible') return;
+    try {
+      const { data } = await supabase
+        .from('questions')
+        .select('id')
+        .eq('is_active', true)
+        .maybeSingle();
+      const activeId = data ? String(data.id) : null;
+      if (activeId !== currentQuestionId) window.location.reload();
+    } catch {
+      // silently ignore — realtime will catch it if the connection recovers
+    }
+  });
+
   // ── Clear local storage ──────────────────────────────────────────────────
 
   document.getElementById('clear-storage-btn')?.addEventListener('click', () => {
