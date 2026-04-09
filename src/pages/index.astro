@@ -91,13 +91,13 @@ const question = await getActiveQuestion();
     </div>
   </main>
 
-  <!-- Clear local storage button -->
+  <!-- Refresh button -->
   <button
-    id="clear-storage-btn"
-    aria-label="Reset session"
+    id="refresh-btn"
+    aria-label="Refresh for new question"
     class="flex fixed items-center gap-2 px-4 bottom-5 right-5 z-40 rounded-full border border-white/10 bg-black/40 p-2.5 text-white/30 backdrop-blur-sm transition-all hover:border-white/20 hover:text-white/60 focus:outline-none focus:ring-2 focus:ring-white/20"
   >
-    Clear session
+    Refresh for new question
     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
       <path d="M3 3v5h5" />
@@ -108,8 +108,7 @@ const question = await getActiveQuestion();
 <script>
   import { createClient } from '@supabase/supabase-js';
 
-  const SESSION_KEY   = 'pathos_session_id';
-  const SUBMITTED_KEY = 'pathos_submitted';
+  const SESSION_KEY = 'pathos_session_id';
 
   const config   = document.getElementById('supabase-config') as HTMLElement;
   const supabase = createClient(config.dataset.supabaseUrl!, config.dataset.supabaseKey!);
@@ -142,10 +141,9 @@ const question = await getActiveQuestion();
     }
   });
 
-  // ── Clear local storage ──────────────────────────────────────────────────
+  // ── Refresh button ───────────────────────────────────────────────────────
 
-  document.getElementById('clear-storage-btn')?.addEventListener('click', () => {
-    localStorage.clear();
+  document.getElementById('refresh-btn')?.addEventListener('click', () => {
     window.location.reload();
   });
 
@@ -169,20 +167,7 @@ const question = await getActiveQuestion();
       return id;
     }
 
-    function isAlreadySubmitted(): boolean {
-      const submitted = JSON.parse(localStorage.getItem(SUBMITTED_KEY) ?? '[]') as number[];
-      return submitted.includes(questionId);
-    }
-
-    function markSubmitted(): void {
-      const submitted = JSON.parse(localStorage.getItem(SUBMITTED_KEY) ?? '[]') as number[];
-      if (!submitted.includes(questionId)) {
-        submitted.push(questionId);
-        localStorage.setItem(SUBMITTED_KEY, JSON.stringify(submitted));
-      }
-    }
-
-    function getFieldValue(id: number, type: string): string[] {
+function getFieldValue(id: number, type: string): string[] {
       const name = `question_${id}`;
       if (type === 'select_all') {
         return [...document.querySelectorAll<HTMLInputElement>(`input[name="${name}"]:checked`)]
@@ -225,7 +210,7 @@ const question = await getActiveQuestion();
       submitBtn.disabled = loading;
       submitBtn.textContent = loading ? 'Submitting…' : 'Submit';
       overlay.hidden = !loading;
-      form.setAttribute('aria-busy', String(loading));
+      form!.setAttribute('aria-busy', String(loading));
     }
 
     function showGlobalError(message: string): void {
@@ -239,8 +224,6 @@ const question = await getActiveQuestion();
       confirmation.hidden = false;
       confirmation.focus();
     }
-
-    if (isAlreadySubmitted()) showConfirmation();
 
     const card = document.querySelector<HTMLElement>(`[data-question-id="${questionId}"][data-question-type]`);
     const questionType     = card?.dataset.questionType ?? '';
@@ -285,7 +268,6 @@ const question = await getActiveQuestion();
         return;
       }
 
-      markSubmitted();
       showConfirmation();
     });
   }
